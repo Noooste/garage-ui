@@ -5,9 +5,12 @@ import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
-
 	// Swagger imports
 	_ "Noooste/garage-ui/docs"
 
@@ -197,5 +200,40 @@ func SetupRoutes(
 				})
 			})
 		}
+	}
+
+	// Serve frontend static files
+	if cfg.Server.FrontendPath == "" {
+		// crash if frontend path is not set in config
+		panic("FrontendPath is not set in configuration")
+	}
+
+	// Check if frontend path exists
+	if _, err := os.Stat(cfg.Server.FrontendPath); err == nil {
+		fmt.Println("Serving frontend from:", cfg.Server.FrontendPath)
+
+		// SPA fallback - serve index.html for all non-API routes
+		app.Use(func(c fiber.Ctx) error {
+			path := c.Path()
+
+			if strings.HasPrefix(path, "/api/") ||
+				strings.HasPrefix(path, "/health") ||
+				strings.HasPrefix(path, "/docs") {
+				fmt.Println("API or health check route, skipping SPA fallback:", path)
+				return c.Next()
+			}
+
+			// Try to serve static files first
+			filePath := filepath.Join(cfg.Server.FrontendPath, path)
+			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				return c.SendFile(filePath)
+			}
+
+			// If no static file exists, serve index.html for SPA routing
+			indexPath := filepath.Join(cfg.Server.FrontendPath, "index.html")
+			return c.SendFile(indexPath)
+		})
+	} else {
+		panic("FrontendPath does not exist: " + cfg.Server.FrontendPath)
 	}
 }
