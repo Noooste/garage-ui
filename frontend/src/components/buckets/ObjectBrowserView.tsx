@@ -1,14 +1,14 @@
-import { useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Header } from '@/components/layout/header';
-import { ObjectsTable } from './ObjectsTable';
-import { CreateDirectoryDialog } from './CreateDirectoryDialog';
-import { DeleteObjectDialog } from './DeleteObjectDialog';
-import { ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, Search, Trash, Upload } from 'lucide-react';
-import { getBreadcrumbs } from '@/lib/file-utils';
-import type { S3Object } from '@/types';
+import {useState} from 'react';
+import {useDropzone} from 'react-dropzone';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Header} from '@/components/layout/header';
+import {ObjectsTable} from './ObjectsTable';
+import {CreateDirectoryDialog} from './CreateDirectoryDialog';
+import {DeleteObjectDialog} from './DeleteObjectDialog';
+import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, Search, Trash, Upload} from 'lucide-react';
+import {getBreadcrumbs} from '@/lib/file-utils';
+import type {S3Object} from '@/types';
 
 interface ObjectBrowserViewProps {
   bucketName: string;
@@ -66,14 +66,17 @@ export function ObjectBrowserView({
   const [selectedFileKeys, setSelectedFileKeys] = useState<Set<string>>(new Set());
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: async (acceptedFiles, fileRejections, event) => {
+    onDrop: async (acceptedFiles, _fileRejections, event) => {
       // Get files with their full paths from DataTransferItems API
       const filesWithPaths: File[] = [];
 
-      if (event.dataTransfer?.items) {
+      // Type cast event to DragEvent to access dataTransfer
+      const dragEvent = event as DragEvent;
+
+      if (dragEvent.dataTransfer?.items) {
         // Use DataTransferItemList API to preserve folder structure
-        const items = Array.from(event.dataTransfer.items);
-        await Promise.all(items.map(async (item) => {
+        const items = Array.from(dragEvent.dataTransfer.items);
+        await Promise.all(items.map(async (item: DataTransferItem) => {
           if (item.kind === 'file') {
             const entry = item.webkitGetAsEntry?.();
             if (entry) {

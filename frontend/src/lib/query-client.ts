@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import {QueryClient} from '@tanstack/react-query';
 
 // Create a query client with default options
 export const queryClient = new QueryClient({
@@ -9,7 +9,7 @@ export const queryClient = new QueryClient({
       retry: 1, // Retry failed requests once
       refetchOnWindowFocus: false, // Don't refetch when window regains focus
       refetchOnMount: false, // Don't refetch on component mount if data exists
-      placeholderData: (previousData) => previousData, // Keep previous data while fetching new data
+      placeholderData: (previousData: unknown) => previousData, // Keep previous data while fetching new data
     },
   },
 });
