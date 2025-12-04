@@ -29,8 +29,6 @@ type ServerConfig struct {
 type GarageConfig struct {
 	Endpoint       string `mapstructure:"endpoint"`
 	Region         string `mapstructure:"region"`
-	AccessKey      string `mapstructure:"access_key"`
-	SecretKey      string `mapstructure:"secret_key"`
 	UseSSL         bool   `mapstructure:"use_ssl"`
 	ForcePathStyle bool   `mapstructure:"force_path_style"`
 	AdminEndpoint  string `mapstructure:"admin_endpoint"`
@@ -145,8 +143,6 @@ func bindEnvVars() {
 	// Garage config
 	viper.BindEnv("garage.endpoint", "GARAGE_UI_GARAGE_ENDPOINT")
 	viper.BindEnv("garage.region", "GARAGE_UI_GARAGE_REGION")
-	viper.BindEnv("garage.access_key", "GARAGE_UI_GARAGE_ACCESS_KEY")
-	viper.BindEnv("garage.secret_key", "GARAGE_UI_GARAGE_SECRET_KEY")
 	viper.BindEnv("garage.use_ssl", "GARAGE_UI_GARAGE_USE_SSL")
 	viper.BindEnv("garage.force_path_style", "GARAGE_UI_GARAGE_FORCE_PATH_STYLE")
 	viper.BindEnv("garage.admin_endpoint", "GARAGE_UI_GARAGE_ADMIN_ENDPOINT")
@@ -204,12 +200,6 @@ func (c *Config) Validate() error {
 	// Validate Garage config
 	if c.Garage.Endpoint == "" {
 		return fmt.Errorf("garage endpoint is required")
-	}
-	if c.Garage.AccessKey == "" {
-		return fmt.Errorf("garage access_key is required")
-	}
-	if c.Garage.SecretKey == "" {
-		return fmt.Errorf("garage secret_key is required")
 	}
 	if c.Garage.AdminEndpoint == "" {
 		return fmt.Errorf("garage admin_endpoint is required")
