@@ -202,12 +202,6 @@ func SetupRoutes(
 		}
 	}
 
-	// Serve frontend static files
-	if cfg.Server.FrontendPath == "" {
-		// crash if frontend path is not set in config
-		panic("FrontendPath is not set in configuration")
-	}
-
 	// Check if frontend path exists
 	if _, err := os.Stat(cfg.Server.FrontendPath); err == nil {
 		fmt.Println("Serving frontend from:", cfg.Server.FrontendPath)
@@ -233,7 +227,5 @@ func SetupRoutes(
 			indexPath := filepath.Join(cfg.Server.FrontendPath, "index.html")
 			return c.SendFile(indexPath)
 		})
-	} else {
-		panic("FrontendPath does not exist: " + cfg.Server.FrontendPath)
 	}
 }

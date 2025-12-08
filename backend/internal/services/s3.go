@@ -10,39 +10,27 @@ import (
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/pkg/utils"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// S3Service handles all S3 operations with Garage
+// S3Service handles all S3 operations with Garage using MinIO SDK
 type S3Service struct {
-	client       *s3.Client
+	client       *minio.Client
 	config       *config.GarageConfig
 	adminService *GarageAdminService
 }
 
-// NewS3Service creates a new S3 service instance
+// NewS3Service creates a new S3 service instance using MinIO SDK
 func NewS3Service(cfg *config.GarageConfig, adminService *GarageAdminService) *S3Service {
-	// Create AWS credentials from Garage config (default/fallback credentials)
-	creds := credentials.NewStaticCredentialsProvider(
-		cfg.AccessKey,
-		cfg.SecretKey,
-		"", // session token (not used for Garage)
-	)
-
-	// Configure S3 client for Garage
-	s3Config := aws.Config{
-		Region:      cfg.Region,
-		Credentials: creds,
-	}
-
-	// Create S3 client with custom endpoint resolver for Garage
-	client := s3.NewFromConfig(s3Config, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(cfg.Endpoint)
-		o.UsePathStyle = cfg.ForcePathStyle
+	// Create MinIO client for Garage
+	client, err := minio.New(cfg.Endpoint, &minio.Options{
+		//Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Secure: cfg.UseSSL,
 	})
+	if err != nil {
+		panic(fmt.Errorf("failed to create MinIO client: %w", err))
+	}
 
 	return &S3Service{
 		client:       client,
@@ -53,12 +41,12 @@ func NewS3Service(cfg *config.GarageConfig, adminService *GarageAdminService) *S
 
 // getBucketCredentials retrieves credentials for a specific bucket
 // It checks the cache first, then queries the Garage Admin API
-func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string) (aws.CredentialsProvider, error) {
+func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string) (*credentials.Credentials, error) {
 	cacheKey := fmt.Sprintf("key:%s", bucketName)
 	cacheData := utils.GlobalCache.Get(cacheKey)
 
 	if cacheData != nil {
-		return cacheData.(aws.CredentialsProvider), nil
+		return cacheData.(*credentials.Credentials), nil
 	}
 
 	// Get bucket info from Garage Admin API
@@ -91,57 +79,48 @@ func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string)
 		return nil, fmt.Errorf("no valid credentials found for bucket %s", bucketName)
 	}
 
-	// Create credentials provider
-	credential := credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")
+	// Create credentials
+	creds := credentials.NewStaticV4(accessKeyID, secretAccessKey, "")
 
 	// Cache credentials for 1 hour
-	utils.GlobalCache.Set(cacheKey, credential, time.Hour)
+	utils.GlobalCache.Set(cacheKey, creds, time.Hour)
 
-	return credential, nil
+	return creds, nil
 }
 
-// getS3Client creates an S3 client for a specific bucket with dynamic credentials
-func (s *S3Service) getS3Client(ctx context.Context, bucketName string) (*s3.Client, error) {
+// getMinioClient creates a MinIO client for a specific bucket with dynamic credentials
+func (s *S3Service) getMinioClient(ctx context.Context, bucketName string) (*minio.Client, error) {
 	creds, err := s.getBucketCredentials(ctx, bucketName)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get credentials for bucket %s: %w", bucketName, err)
 	}
 
-	// AWS config
-	awsConfig := aws.Config{
-		Credentials: creds,
-		Region:      s.config.Region,
-	}
-
-	// Build S3 client with BaseEndpoint for Garage
-	client := s3.NewFromConfig(awsConfig, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(s.config.Endpoint)
-		o.UsePathStyle = s.config.ForcePathStyle
-		o.EndpointResolver = s3.EndpointResolverFunc(func(region string, opts s3.EndpointResolverOptions) (aws.Endpoint, error) {
-			return aws.Endpoint{
-				URL:           s.config.Endpoint,
-				SigningRegion: s.config.Region,
-			}, nil
-		})
+	// Create MinIO client with bucket-specific credentials
+	client, err := minio.New(s.config.Endpoint, &minio.Options{
+		Creds:  creds,
+		Secure: s.config.UseSSL,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MinIO client for bucket %s: %w", bucketName, err)
+	}
 
 	return client, nil
 }
 
 // ListBuckets retrieves all buckets from Garage
 func (s *S3Service) ListBuckets(ctx context.Context) (*models.BucketListResponse, error) {
-	// Call S3 ListBuckets API
-	result, err := s.client.ListBuckets(ctx, &s3.ListBucketsInput{})
+	// Call MinIO ListBuckets API
+	bucketInfos, err := s.client.ListBuckets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list buckets: %w", err)
 	}
 
-	// Convert S3 buckets to our model
-	buckets := make([]models.BucketInfo, 0, len(result.Buckets))
-	for _, bucket := range result.Buckets {
+	// Convert MinIO buckets to our model
+	buckets := make([]models.BucketInfo, 0, len(bucketInfos))
+	for _, bucket := range bucketInfos {
 		buckets = append(buckets, models.BucketInfo{
-			Name:         aws.ToString(bucket.Name),
-			CreationDate: aws.ToTime(bucket.CreationDate),
+			Name:         bucket.Name,
+			CreationDate: bucket.CreationDate,
 		})
 	}
 
@@ -153,17 +132,15 @@ func (s *S3Service) ListBuckets(ctx context.Context) (*models.BucketListResponse
 
 // CreateBucket creates a new bucket in Garage
 func (s *S3Service) CreateBucket(ctx context.Context, bucketName string) error {
-	client, err := s.getS3Client(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	input := &s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
-	}
-
-	// Call S3 CreateBucket API
-	_, err = client.CreateBucket(ctx, input)
+	// Call MinIO MakeBucket API
+	err = client.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{
+		Region: s.config.Region,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
 	}
@@ -173,15 +150,13 @@ func (s *S3Service) CreateBucket(ctx context.Context, bucketName string) error {
 
 // DeleteBucket deletes a bucket from Garage
 func (s *S3Service) DeleteBucket(ctx context.Context, bucketName string) error {
-	client, err := s.getS3Client(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// Call S3 DeleteBucket API
-	_, err = client.DeleteBucket(ctx, &s3.DeleteBucketInput{
-		Bucket: aws.String(bucketName),
-	})
+	// Call MinIO RemoveBucket API
+	err = client.RemoveBucket(ctx, bucketName)
 	if err != nil {
 		return fmt.Errorf("failed to delete bucket %s: %w", bucketName, err)
 	}
@@ -191,10 +166,10 @@ func (s *S3Service) DeleteBucket(ctx context.Context, bucketName string) error {
 
 // ListObjects lists objects in a bucket with optional prefix filter and pagination
 func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error) {
-	// Get bucket-specific S3 client
-	client, err := s.getS3Client(ctx, bucketName)
+	// Get bucket-specific MinIO client
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
 	// Set default max keys if not specified
@@ -202,130 +177,125 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		maxKeys = 100
 	}
 
-	// Create list objects input
-	input := &s3.ListObjectsV2Input{
-		Bucket:    aws.String(bucketName),
-		Delimiter: aws.String("/"),
-		MaxKeys:   aws.Int32(int32(maxKeys)),
+	// Create list objects options
+	opts := minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: false, // Use delimiter to get folders
+		MaxKeys:   maxKeys,
 	}
 
-	if prefix != "" {
-		input.Prefix = aws.String(prefix)
-	}
+	// Note: MinIO SDK v7 doesn't directly support continuation tokens in the same way
+	// We'll use the ListObjects which returns a channel
 
-	if continuationToken != "" {
-		input.ContinuationToken = aws.String(continuationToken)
-	}
+	objects := make([]models.ObjectInfo, 0)
+	prefixes := make(map[string]bool) // Use map to deduplicate prefixes
 
-	// Call S3 ListObjectsV2 API
-	result, err := client.ListObjectsV2(ctx, input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, err)
-	}
+	// List objects
+	objectCh := client.ListObjects(ctx, bucketName, opts)
 
-	// Convert S3 objects to our model
-	objects := make([]models.ObjectInfo, 0, len(result.Contents))
-	for _, obj := range result.Contents {
+	count := 0
+	for object := range objectCh {
+		if object.Err != nil {
+			return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, object.Err)
+		}
+
+		// Check if this is a prefix (directory)
+		if object.Key[len(object.Key)-1:] == "/" && object.Size == 0 {
+			prefixes[object.Key] = true
+			continue
+		}
+
+		// Add to objects list
 		objects = append(objects, models.ObjectInfo{
-			Key:          aws.ToString(obj.Key),
-			Size:         aws.ToInt64(obj.Size),
-			LastModified: aws.ToTime(obj.LastModified),
-			ETag:         aws.ToString(obj.ETag),
-			StorageClass: string(obj.StorageClass),
+			Key:          object.Key,
+			Size:         object.Size,
+			LastModified: object.LastModified,
+			ETag:         object.ETag,
+			ContentType:  object.ContentType,
+			StorageClass: object.StorageClass,
 		})
+
+		count++
+		if count >= maxKeys {
+			break
+		}
 	}
 
-	// Extract common prefixes (folders/directories)
-	prefixes := make([]string, 0, len(result.CommonPrefixes))
-	for _, p := range result.CommonPrefixes {
-		prefixes = append(prefixes, aws.ToString(p.Prefix))
+	// Convert prefixes map to slice
+	prefixList := make([]string, 0, len(prefixes))
+	for p := range prefixes {
+		prefixList = append(prefixList, p)
 	}
 
 	return &models.ObjectListResponse{
 		Bucket:                bucketName,
 		Objects:               objects,
-		Prefixes:              prefixes,
+		Prefixes:              prefixList,
 		Count:                 len(objects),
-		IsTruncated:           aws.ToBool(result.IsTruncated),
-		NextContinuationToken: aws.ToString(result.NextContinuationToken),
+		IsTruncated:           count >= maxKeys,
+		NextContinuationToken: "", // MinIO SDK handles this differently
 	}, nil
 }
 
 // UploadObject uploads an object to a bucket
 func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error) {
-	// Get bucket-specific S3 client
-	client, err := s.getS3Client(ctx, bucketName)
+	// Get bucket-specific MinIO client
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// Create put object input
-	input := &s3.PutObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-		Body:   body,
+	// Upload options
+	opts := minio.PutObjectOptions{
+		ContentType: contentType,
 	}
 
-	if contentType != "" {
-		input.ContentType = aws.String(contentType)
-	}
-
-	// Call S3 PutObject API
-	result, err := client.PutObject(ctx, input)
+	// Call MinIO PutObject API
+	info, err := client.PutObject(ctx, bucketName, key, body, -1, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload object %s to bucket %s: %w", key, bucketName, err)
-	}
-
-	// Get object metadata to return size
-	headResult, err := client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-	})
-
-	var size int64
-	if err == nil {
-		size = aws.ToInt64(headResult.ContentLength)
 	}
 
 	return &models.ObjectUploadResponse{
 		Bucket:      bucketName,
 		Key:         key,
-		ETag:        aws.ToString(result.ETag),
-		Size:        size,
+		ETag:        info.ETag,
+		Size:        info.Size,
 		ContentType: contentType,
 	}, nil
 }
 
 // GetObject retrieves an object from a bucket
 func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error) {
-	// Call S3 GetObject API
-	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-	})
+	// Call MinIO GetObject API
+	object, err := s.client.GetObject(ctx, bucketName, key, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get object %s from bucket %s: %w", key, bucketName, err)
+	}
+
+	// Get object info
+	stat, err := object.Stat()
+	if err != nil {
+		object.Close()
+		return nil, nil, fmt.Errorf("failed to get object info for %s in bucket %s: %w", key, bucketName, err)
 	}
 
 	// Create object info
 	objectInfo := &models.ObjectInfo{
 		Key:          key,
-		Size:         aws.ToInt64(result.ContentLength),
-		LastModified: aws.ToTime(result.LastModified),
-		ETag:         aws.ToString(result.ETag),
-		ContentType:  aws.ToString(result.ContentType),
+		Size:         stat.Size,
+		LastModified: stat.LastModified,
+		ETag:         stat.ETag,
+		ContentType:  stat.ContentType,
 	}
 
-	return result.Body, objectInfo, nil
+	return object, objectInfo, nil
 }
 
 // DeleteObject deletes an object from a bucket
 func (s *S3Service) DeleteObject(ctx context.Context, bucketName, key string) error {
-	// Call S3 DeleteObject API
-	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-	})
+	// Call MinIO RemoveObject API
+	err := s.client.RemoveObject(ctx, bucketName, key, minio.RemoveObjectOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete object %s from bucket %s: %w", key, bucketName, err)
 	}
@@ -335,44 +305,43 @@ func (s *S3Service) DeleteObject(ctx context.Context, bucketName, key string) er
 
 // ObjectExists checks if an object exists in a bucket
 func (s *S3Service) ObjectExists(ctx context.Context, bucketName, key string) (bool, error) {
-	// Get bucket-specific S3 client
-	client, err := s.getS3Client(ctx, bucketName)
+	// Get bucket-specific MinIO client
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return false, fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return false, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	_, err = client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-	})
+	_, err = client.StatObject(ctx, bucketName, key, minio.StatObjectOptions{})
 	if err != nil {
-		return false, nil
+		// Check if error is "object not found"
+		errResponse := minio.ToErrorResponse(err)
+		if errResponse.Code == "NoSuchKey" {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check if object exists: %w", err)
 	}
 	return true, nil
 }
 
 // GetObjectMetadata retrieves metadata for an object without downloading it
 func (s *S3Service) GetObjectMetadata(ctx context.Context, bucketName, key string) (*models.ObjectInfo, error) {
-	// Get bucket-specific S3 client
-	client, err := s.getS3Client(ctx, bucketName)
+	// Get bucket-specific MinIO client
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	result, err := client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-	})
+	stat, err := client.StatObject(ctx, bucketName, key, minio.StatObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata for object %s in bucket %s: %w", key, bucketName, err)
 	}
 
 	return &models.ObjectInfo{
 		Key:          key,
-		Size:         aws.ToInt64(result.ContentLength),
-		LastModified: aws.ToTime(result.LastModified),
-		ETag:         aws.ToString(result.ETag),
-		ContentType:  aws.ToString(result.ContentType),
+		Size:         stat.Size,
+		LastModified: stat.LastModified,
+		ETag:         stat.ETag,
+		ContentType:  stat.ContentType,
 	}, nil
 }
 
@@ -382,30 +351,33 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 		return nil
 	}
 
-	// Get bucket-specific S3 client
-	client, err := s.getS3Client(ctx, bucketName)
+	// Get bucket-specific MinIO client
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// Create delete objects for batch deletion
-	objects := make([]types.ObjectIdentifier, len(keys))
-	for i, key := range keys {
-		objects[i] = types.ObjectIdentifier{
-			Key: aws.String(key),
+	// Create channel for objects to delete
+	objectsCh := make(chan minio.ObjectInfo)
+
+	// Send objects to delete in a goroutine
+	go func() {
+		defer close(objectsCh)
+		for _, key := range keys {
+			objectsCh <- minio.ObjectInfo{
+				Key: key,
+			}
 		}
-	}
+	}()
 
-	// Call S3 DeleteObjects API (batch delete)
-	_, err = client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
-		Bucket: aws.String(bucketName),
-		Delete: &types.Delete{
-			Objects: objects,
-			Quiet:   aws.Bool(false),
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to delete multiple objects from bucket %s: %w", bucketName, err)
+	// Call MinIO RemoveObjects API (batch delete)
+	errorCh := client.RemoveObjects(ctx, bucketName, objectsCh, minio.RemoveObjectsOptions{})
+
+	// Check for errors
+	for err := range errorCh {
+		if err.Err != nil {
+			return fmt.Errorf("failed to delete object %s from bucket %s: %w", err.ObjectName, bucketName, err.Err)
+		}
 	}
 
 	return nil
@@ -414,27 +386,19 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 // GetPresignedURL generates a pre-signed URL for temporary access to an object
 // This is useful for sharing files without exposing credentials
 func (s *S3Service) GetPresignedURL(ctx context.Context, bucketName, key string, expiresIn time.Duration) (string, error) {
-	// Get bucket-specific S3 client
-	client, err := s.getS3Client(ctx, bucketName)
+	// Get bucket-specific MinIO client
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
-		return "", fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err)
+		return "", fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
 
-	// Create presign client
-	presignClient := s3.NewPresignClient(client)
-
-	// Generate presigned GET request
-	presignResult, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-	}, func(opts *s3.PresignOptions) {
-		opts.Expires = expiresIn
-	})
+	// Generate presigned GET URL
+	presignedURL, err := client.PresignedGetObject(ctx, bucketName, key, expiresIn, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL for %s/%s: %w", bucketName, key, err)
 	}
 
-	return presignResult.URL, nil
+	return presignedURL.String(), nil
 }
 
 // UploadResult represents the result of a single file upload
@@ -457,15 +421,15 @@ func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string
 }) []UploadResult {
 	results := make([]UploadResult, len(files))
 
-	// Get bucket-specific S3 client once for all uploads
-	client, err := s.getS3Client(ctx, bucketName)
+	// Get bucket-specific MinIO client once for all uploads
+	client, err := s.getMinioClient(ctx, bucketName)
 	if err != nil {
 		// If we can't get the client, all uploads fail
 		for i := range files {
 			results[i] = UploadResult{
 				Key:     files[i].Key,
 				Success: false,
-				Error:   fmt.Errorf("failed to get S3 client for bucket %s: %w", bucketName, err),
+				Error:   fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err),
 			}
 		}
 		return results
@@ -473,19 +437,13 @@ func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string
 
 	// Upload each file
 	for i, file := range files {
-		// Create put object input
-		input := &s3.PutObjectInput{
-			Bucket: aws.String(bucketName),
-			Key:    aws.String(file.Key),
-			Body:   file.Body,
-		}
-
-		if file.ContentType != "" {
-			input.ContentType = aws.String(file.ContentType)
+		// Upload options
+		opts := minio.PutObjectOptions{
+			ContentType: file.ContentType,
 		}
 
 		// Attempt upload
-		result, err := client.PutObject(ctx, input)
+		info, err := client.PutObject(ctx, bucketName, file.Key, file.Body, -1, opts)
 		if err != nil {
 			results[i] = UploadResult{
 				Key:         file.Key,
@@ -496,23 +454,12 @@ func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string
 			continue
 		}
 
-		// Get object metadata to return size
-		headResult, err := client.HeadObject(ctx, &s3.HeadObjectInput{
-			Bucket: aws.String(bucketName),
-			Key:    aws.String(file.Key),
-		})
-
-		var size int64
-		if err == nil {
-			size = aws.ToInt64(headResult.ContentLength)
-		}
-
 		results[i] = UploadResult{
 			Key:         file.Key,
 			Success:     true,
 			Error:       nil,
-			ETag:        aws.ToString(result.ETag),
-			Size:        size,
+			ETag:        info.ETag,
+			Size:        info.Size,
 			ContentType: file.ContentType,
 		}
 	}
