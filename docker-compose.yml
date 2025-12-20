@@ -1,0 +1,39 @@
+---
+services:
+  garage:
+    image: dxflrs/garage:v2.0.0
+    container_name: garage
+    volumes:
+      - ./garage.toml:/etc/garage.toml
+      - ./meta:/var/lib/garage/meta
+      - ./data:/var/lib/garage/data
+    restart: unless-stopped
+    ports:
+      - "3900:3900"
+      - "3901:3901"
+      - "3902:3903"
+      - "3903:3903"
+
+  garage-ui:
+    image: noooste/garage-ui:latest
+    container_name: garage-ui
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - garage
+    environment:
+      # Garage S3 Configuration
+      GARAGE_UI_GARAGE_ENDPOINT: "http://garage:3900"
+      GARAGE_UI_GARAGE_ADMIN_ENDPOINT: "http://garage:3903"
+
+      # Server Configuration
+      GARAGE_UI_SERVER_HOST: "0.0.0.0"
+      GARAGE_UI_SERVER_PORT: "8080"
+      GARAGE_UI_SERVER_ENVIRONMENT: "production"
+
+      # Logging
+      GARAGE_UI_LOGGING_LEVEL: "info"
+      GARAGE_UI_LOGGING_FORMAT: "json"

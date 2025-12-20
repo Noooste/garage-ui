@@ -1,0 +1,553 @@
+# Default values for garage-ui Helm chart
+# This file contains configuration values for deploying Garage UI
+# Customize the values below according to your deployment environment
+
+# Number of replica pods to run
+# Increase for high availability (recommended: 2-3 for production)
+replicaCount: 1
+
+# Docker image configuration
+image:
+  # Container registry and image name
+  # Default uses the official Garage UI image from Docker Hub
+  repository: noooste/garage-ui
+
+  # Image pull policy
+  # Options: Always, IfNotPresent, Never
+  # IfNotPresent: Only pull if image is not already present locally
+  pullPolicy: IfNotPresent
+
+  # Image tag to use (defaults to chart appVersion if empty)
+  # Example: "1.0.0" or "latest"
+  tag: ""
+
+# Credentials for accessing private container registries
+# Example:
+# imagePullSecrets:
+#   - name: regcred
+imagePullSecrets: []
+
+# Override the default chart name in resource names
+# Leave empty to use the chart name
+nameOverride: ""
+
+# Override the full resource name (includes release name)
+# Leave empty to use the default naming convention
+fullnameOverride: ""
+
+# ============================================================================
+# APPLICATION CONFIGURATION
+# ============================================================================
+# This section contains the main application configuration
+# Customize according to your Garage deployment and security requirements
+#
+# TIP: You can now easily override specific values using --set:
+#   --set config.server.port=9090
+#   --set config.garage.admin_token=your-token
+#   --set config.auth.mode=basic
+config:
+  # ========================================
+  # Server Configuration
+  # ========================================
+  server:
+    # Network interface to bind to
+    # "0.0.0.0" listens on all interfaces (recommended for containers)
+    host: "0.0.0.0"
+
+    # Port the application listens on
+    # Default: 8080
+    port: 8080
+
+    # Deployment environment
+    # Options: "production", "development", "staging"
+    environment: "production"
+
+  # ========================================
+  # Garage S3 Storage Configuration
+  # ========================================
+  garage:
+    # Garage S3 API endpoint
+    # Format: http(s)://hostname:port
+    # Default port: 3900
+    # Example: "http://garage.example.com:3900" or "http://garage:3900" for in-cluster
+    endpoint: "http://garage:3900"
+
+    # S3 region name
+    # For Garage, this can be any arbitrary value (Garage ignores regions)
+    # Default: "garage"
+    region: "garage"
+
+    # Garage Admin API endpoint
+    # This is used for administrative operations like bucket and key management
+    # Default port: 3903
+    # Example: "http://garage.example.com:3903" or "http://garage:3903" for in-cluster
+    admin_endpoint: "http://garage:3903"
+
+    # Admin API bearer token
+    # REQUIRED: Obtain this from your Garage server configuration
+    # This token grants administrative access - keep it secure!
+    # To generate: See Garage documentation for admin token setup
+    admin_token: ""
+
+  # ========================================
+  # Authentication Configuration
+  # ========================================
+  auth:
+    # Authentication mode
+    # Options:
+    #   "none"  - No authentication (open access - not recommended for production)
+    #   "basic" - Simple username/password authentication
+    #   "oidc"  - OpenID Connect integration (recommended for production)
+    mode: "none"
+
+    # Basic Authentication Settings
+    # Only used when mode = "basic"
+    # Provides simple username/password protection
+    basic:
+      # Username for basic auth login
+      username: "admin"
+
+      # Password for basic auth login
+      # IMPORTANT: Change this default password immediately!
+      password: "changeme"
+
+    # OpenID Connect (OIDC) Configuration
+    # Only used when mode = "oidc"
+    # Integrates with identity providers like Keycloak, Auth0, Okta, etc.
+    oidc:
+      # Enable/disable OIDC (must be true when mode = "oidc")
+      enabled: false
+
+      # Display name of your OIDC provider
+      # Examples: "Keycloak", "Auth0", "Okta", "Azure AD"
+      provider_name: "Keycloak"
+
+      # OAuth2 client ID registered with your OIDC provider
+      # Obtain this from your OIDC provider's application settings
+      client_id: "garage-ui"
+
+      # OAuth2 client secret registered with your OIDC provider
+      # IMPORTANT: Keep this secret secure! Consider using Kubernetes secrets
+      client_secret: "your-client-secret"
+
+      # OAuth2/OIDC scopes to request during authentication
+      # Standard scopes: openid (required), email, profile
+      # Add custom scopes as needed by your provider
+      scopes:
+        - openid
+        - email
+        - profile
+
+      # OIDC Provider Endpoints
+      # Replace "keycloak.example.com" and realm with your actual values
+      # For Keycloak: https://your-keycloak/realms/your-realm
+      # For Auth0: https://your-tenant.auth0.com
+      # For Okta: https://your-domain.okta.com
+
+      # OIDC issuer URL (base URL for OIDC discovery)
+      issuer_url: "https://keycloak.example.com/realms/master"
+
+      # Authorization endpoint URL
+      auth_url: "https://keycloak.example.com/realms/master/protocol/openid-connect/auth"
+
+      # Token endpoint URL
+      token_url: "https://keycloak.example.com/realms/master/protocol/openid-connect/token"
+
+      # User info endpoint URL
+      userinfo_url: "https://keycloak.example.com/realms/master/protocol/openid-connect/userinfo"
+
+      # Token Validation Settings
+      # Set to true only if you have issuer mismatch issues (not recommended)
+      skip_issuer_check: false
+
+      # Set to true to skip token expiry validation (not recommended for production)
+      skip_expiry_check: false
+
+      # User Attribute Mappings
+      # Map OIDC claims to application user attributes
+      # Adjust these based on your OIDC provider's claim structure
+
+      # Claim containing user's email address
+      email_attribute: "email"
+
+      # Claim containing user's username/login ID
+      username_attribute: "preferred_username"
+
+      # Claim containing user's display name
+      name_attribute: "name"
+
+      # Role-Based Access Control (Optional)
+      # Path to roles in the OIDC token claims
+      # Example for Keycloak: "resource_access.garage-ui.roles"
+      # Example for Auth0: "https://your-app/roles"
+      role_attribute_path: "resource_access.garage-ui.roles"
+
+      # Role name that grants admin privileges
+      # Users with this role will have full administrative access
+      admin_role: "admin"
+
+      # TLS/SSL Configuration
+      # Skip TLS certificate verification (only for testing - never in production!)
+      tls_skip_verify: false
+
+      # Session Management
+      # How long user sessions remain valid without activity
+      # Value in seconds (86400 = 24 hours)
+      session_max_age: 86400
+
+      # Name of the session cookie
+      cookie_name: "garage_session"
+
+      # Only send cookie over HTTPS connections
+      # Set to false only for local development without HTTPS
+      cookie_secure: true
+
+      # Prevent JavaScript access to the cookie (security feature)
+      # Should remain true for security
+      cookie_http_only: true
+
+      # SameSite cookie attribute for CSRF protection
+      # Options: "lax" (recommended), "strict", "none"
+      # Use "lax" for most cases, "strict" for maximum security
+      cookie_same_site: "lax"
+
+  # ========================================
+  # CORS (Cross-Origin Resource Sharing)
+  # ========================================
+  # Configure which origins can access the API from browsers
+  cors:
+    # Enable or disable CORS
+    # Disable if the frontend and backend are served from the same origin
+    enabled: true
+
+    # List of allowed origins
+    # "*" allows all origins (convenient but less secure)
+    # For production, specify exact origins:
+    # Example:
+    #   - "https://garage-ui.example.com"
+    #   - "https://app.example.com"
+    allowed_origins:
+      - "*"
+
+    # HTTP methods that are allowed in CORS requests
+    # Include all methods your API uses
+    allowed_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+
+    # HTTP headers that are allowed in CORS requests
+    # Add any custom headers your application requires
+    allowed_headers:
+      - Origin
+      - Content-Type
+      - Accept
+      - Authorization
+
+    # Allow credentials (cookies, authorization headers) in CORS requests
+    # Set to true if your frontend needs to send authentication cookies
+    # NOTE: When true, allowed_origins cannot be "*"
+    allow_credentials: false
+
+    # How long browsers can cache CORS preflight responses (in seconds)
+    # 3600 = 1 hour
+    max_age: 3600
+
+  # ========================================
+  # Logging Configuration
+  # ========================================
+  logging:
+    # Log verbosity level
+    # Options:
+    #   "debug" - Verbose logging, useful for troubleshooting
+    #   "info"  - Standard logging (recommended for production)
+    #   "warn"  - Only warnings and errors
+    #   "error" - Only errors
+    level: "info"
+
+    # Log output format
+    # Options:
+    #   "json" - Structured JSON format (recommended for production/log aggregation)
+    #   "text" - Human-readable text format (useful for development)
+    format: "json"
+
+# ============================================================================
+# KUBERNETES POD CONFIGURATION
+# ============================================================================
+
+# Annotations to add to the pod
+# Use for integrations with service meshes, monitoring, etc.
+# Example:
+# podAnnotations:
+#   prometheus.io/scrape: "true"
+#   prometheus.io/port: "8080"
+podAnnotations: {}
+
+# Pod-level security context
+# Defines security settings for all containers in the pod
+podSecurityContext:
+  # Run containers as non-root user (security best practice)
+  runAsNonRoot: true
+
+  # User ID to run containers as
+  # Default: 1000 (non-privileged user)
+  runAsUser: 1000
+
+  # Group ID for filesystem access
+  # Files created by the pod will have this group ownership
+  fsGroup: 1000
+
+# Container-level security context
+# Security settings specific to the application container
+securityContext:
+  # Prevent privilege escalation (security best practice)
+  # Ensures the container cannot gain more privileges than its parent
+  allowPrivilegeEscalation: false
+
+  # Drop all Linux capabilities and only add what's needed
+  # This follows the principle of least privilege
+  capabilities:
+    drop:
+    - ALL
+
+  # Allow write access to the root filesystem
+  # Set to true for read-only root filesystem (more secure but may require adjustments)
+  readOnlyRootFilesystem: false
+
+# ============================================================================
+# KUBERNETES SERVICE
+# ============================================================================
+service:
+  # Service type determines how the service is exposed
+  # Options:
+  #   ClusterIP    - Internal only (default, recommended when using Ingress)
+  #   NodePort     - Expose on each node's IP at a static port
+  #   LoadBalancer - Expose using a cloud provider's load balancer
+  type: ClusterIP
+
+  # Port the service listens on
+  # This is the port other services/ingress will connect to
+  # Default: 80
+  port: 80
+
+# ============================================================================
+# INGRESS CONFIGURATION
+# ============================================================================
+# Ingress exposes HTTP/HTTPS routes from outside the cluster to the service
+ingress:
+  # Enable or disable ingress
+  # Set to true to make the application accessible from outside the cluster
+  enabled: false
+
+  # Ingress class name
+  # Specifies which ingress controller to use
+  # Common values: "nginx", "traefik", "alb" (AWS)
+  # Ensure the specified controller is installed in your cluster
+  className: "nginx"
+
+  # Additional annotations for the ingress
+  # Use for configuring ingress controller behavior, SSL, authentication, etc.
+  # Examples:
+  #   cert-manager.io/cluster-issuer: "letsencrypt-prod"  # For automatic SSL certificates
+  #   nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  #   nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+  annotations: {}
+
+  # Hostname and path configuration
+  hosts:
+    # Replace "garage-ui.local" with your actual domain
+    - host: garage-ui.local
+      paths:
+        # Path where the application will be accessible
+        - path: /
+          # pathType options: Prefix, Exact, ImplementationSpecific
+          pathType: Prefix
+
+  # TLS/SSL configuration
+  # Uncomment and configure to enable HTTPS
+  # Requires a TLS certificate stored in a Kubernetes secret
+  tls: []
+  #  - secretName: garage-ui-tls
+  #    hosts:
+  #      - garage-ui.local
+  #
+  # To use cert-manager for automatic certificates:
+  # 1. Install cert-manager in your cluster
+  # 2. Create a ClusterIssuer (e.g., letsencrypt-prod)
+  # 3. Add annotation: cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  # 4. Uncomment the tls section above
+
+# ============================================================================
+# RESOURCE LIMITS AND REQUESTS
+# ============================================================================
+# Configure CPU and memory allocation for the pods
+# Requests: Guaranteed resources (used for scheduling)
+# Limits: Maximum resources the container can use
+resources:
+  limits:
+    # Maximum CPU cores the container can use
+    # 500m = 0.5 CPU cores
+    # Increase for high-traffic deployments
+    cpu: 500m
+
+    # Maximum memory the container can use
+    # Container will be killed if it exceeds this limit
+    memory: 512Mi
+
+  requests:
+    # Guaranteed CPU allocated to the container
+    # 100m = 0.1 CPU cores
+    # Cluster scheduler ensures this amount is available
+    cpu: 100m
+
+    # Guaranteed memory allocated to the container
+    # Cluster scheduler ensures this amount is available
+    memory: 128Mi
+
+# ============================================================================
+# HEALTH CHECKS
+# ============================================================================
+
+# Liveness Probe
+# Kubernetes restarts the container if this probe fails
+# Detects if the application is running but in a broken state
+livenessProbe:
+  # Enable or disable the liveness probe
+  enabled: true
+
+  # HTTP endpoint to check
+  httpGet:
+    # Health check endpoint path
+    path: /health
+    # Port name (defined in the container spec)
+    port: http
+
+  # Wait time before starting liveness checks after container starts
+  # Give the application time to initialize
+  initialDelaySeconds: 30
+
+  # How often to perform the probe (in seconds)
+  periodSeconds: 10
+
+  # Maximum time to wait for the probe to complete
+  timeoutSeconds: 3
+
+  # Number of consecutive failures before restarting the container
+  failureThreshold: 3
+
+# Readiness Probe
+# Kubernetes stops sending traffic if this probe fails
+# Determines when the container is ready to accept traffic
+readinessProbe:
+  # Enable or disable the readiness probe
+  enabled: true
+
+  # HTTP endpoint to check
+  httpGet:
+    # Readiness check endpoint path
+    path: /health
+    # Port name (defined in the container spec)
+    port: http
+
+  # Wait time before starting readiness checks after container starts
+  initialDelaySeconds: 10
+
+  # How often to perform the probe (in seconds)
+  periodSeconds: 5
+
+  # Maximum time to wait for the probe to complete
+  timeoutSeconds: 3
+
+  # Number of consecutive failures before marking as not ready
+  failureThreshold: 3
+
+# ============================================================================
+# MONITORING AND OBSERVABILITY
+# ============================================================================
+
+# ServiceMonitor for Prometheus Operator
+# Automatically configure Prometheus to scrape metrics from the application
+# Requires Prometheus Operator to be installed in the cluster
+serviceMonitor:
+  # Enable or disable ServiceMonitor creation
+  # Set to true if using Prometheus Operator for monitoring
+  enabled: false
+
+  # How often Prometheus should scrape metrics
+  # Format: duration string (e.g., "30s", "1m", "5m")
+  interval: 30s
+
+  # Metrics endpoint path
+  # The application exposes metrics at this path
+  path: /api/v1/monitoring/metrics
+
+  # Additional labels for the ServiceMonitor
+  # Use to match Prometheus scrape configurations
+  # Example:
+  # labels:
+  #   prometheus: kube-prometheus
+  labels: {}
+
+# ============================================================================
+# NETWORK POLICY
+# ============================================================================
+# Controls network traffic to/from the pods
+# Requires a network plugin that supports NetworkPolicy (e.g., Calico, Cilium)
+networkPolicy:
+  # Enable or disable NetworkPolicy creation
+  # Provides network-level security by restricting pod communication
+  enabled: false
+
+  # Types of policies to enforce
+  # Ingress: Controls incoming traffic to the pod
+  # Egress: Controls outgoing traffic from the pod
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Note: When enabled, by default only allows necessary traffic
+  # Customize the NetworkPolicy template if you need specific rules
+
+# ============================================================================
+# POD SCHEDULING
+# ============================================================================
+
+# Node Selector
+# Schedule pods only on nodes with specific labels
+# Useful for deploying to specific node pools or hardware types
+# Example:
+# nodeSelector:
+#   disktype: ssd
+#   environment: production
+nodeSelector: {}
+
+# Tolerations
+# Allow pods to be scheduled on nodes with matching taints
+# Useful for dedicated node pools or special hardware
+# Example:
+# tolerations:
+#   - key: "dedicated"
+#     operator: "Equal"
+#     value: "garage-ui"
+#     effect: "NoSchedule"
+tolerations: []
+
+# Affinity Rules
+# Advanced pod scheduling constraints
+# Controls which nodes pods can be scheduled on and pod co-location
+# Example for pod anti-affinity (spread pods across nodes):
+# affinity:
+#   podAntiAffinity:
+#     preferredDuringSchedulingIgnoredDuringExecution:
+#       - weight: 100
+#         podAffinityTerm:
+#           labelSelector:
+#             matchExpressions:
+#               - key: app.kubernetes.io/name
+#                 operator: In
+#                 values:
+#                   - garage-ui
+#           topologyKey: kubernetes.io/hostname
+affinity: {}

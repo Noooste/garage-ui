@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "garage-ui.fullname" . }}-config
+  labels:
+    {{- include "garage-ui.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+{{- .Values.config | toYaml | nindent 4 }}

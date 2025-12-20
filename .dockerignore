@@ -1,0 +1,46 @@
+
+# Git files
+.git
+.gitignore
+
+# IDE files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*.test
+coverage.txt
+coverage.html
+
+# Frontend development files
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.local
+
+# Backend development files
+*.log
+tmp/
+temp/
+
+# Documentation (optional, include if needed in image)
+# docs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Development config (you may want a separate config for production)
+*.local.yaml
+

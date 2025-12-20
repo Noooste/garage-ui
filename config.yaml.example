@@ -1,0 +1,92 @@
+# Garage UI Backend Configuration
+
+# Server configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  environment: "development" # development, production
+
+# Garage S3 Configuration
+garage:
+  endpoint: "http://localhost:3900" # Garage S3 API endpoint
+  region: "eu-west-1" # S3 region (can be any value for Garage)
+
+  # Garage Admin API configuration
+  admin_endpoint: "http://localhost:3903" # Garage Admin API endpoint
+  admin_token: "changeme" # Admin API bearer token
+
+# Authentication Configuration
+auth:
+  # Auth mode: "none", "basic", or "oidc"
+  mode: "none"
+
+  # Basic Authentication (only used when mode = "basic")
+  basic:
+    username: "admin"
+    password: "changeme"
+
+  # OIDC Configuration (only used when mode = "oidc")
+  oidc:
+    enabled: true
+    provider_name: "Keycloak"
+    client_id: "garage-ui"
+    client_secret: "your-client-secret"
+
+    # OIDC scopes to request
+    scopes:
+      - openid
+      - email
+      - profile
+
+    # OIDC Provider URLs
+    issuer_url: "https://keycloak.example.com/realms/master"
+    auth_url: "https://keycloak.example.com/realms/master/protocol/openid-connect/auth"
+    token_url: "https://keycloak.example.com/realms/master/protocol/openid-connect/token"
+    userinfo_url: "https://keycloak.example.com/realms/master/protocol/openid-connect/userinfo"
+
+    # Token validation
+    skip_issuer_check: false
+    skip_expiry_check: false
+
+    # Attribute mappings
+    email_attribute: "email"
+    username_attribute: "preferred_username"
+    name_attribute: "name"
+
+    # Role-based access (optional)
+    role_attribute_path: "resource_access.garage-ui.roles"
+    admin_role: "admin"
+
+    # TLS configuration
+    tls_skip_verify: false # Only set to true for testing, not recommended for production
+
+    # Session configuration
+    session_max_age: 86400 # 24 hours in seconds
+    cookie_name: "garage_session"
+    cookie_secure: false # Set to true in production with HTTPS
+    cookie_http_only: true
+    cookie_same_site: "lax" # lax, strict, none
+
+# CORS Configuration (for frontend)
+cors:
+  enabled: true
+  allowed_origins:
+    - "*" # Vite default
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed_headers:
+    - Origin
+    - Content-Type
+    - Accept
+    - Authorization
+  allow_credentials: false
+  max_age: 3600
+
+# Logging
+logging:
+  level: "info" # debug, info, warn, error
+  format: "json" # json, text
