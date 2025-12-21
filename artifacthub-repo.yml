@@ -3,3 +3,4 @@ owners:
   - name: Noooste
     email: 83548733+Noooste@users.noreply.github.com
 logoURL: https://helm.noste.dev/garage.png
+official: true
