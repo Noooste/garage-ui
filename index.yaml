@@ -3,6 +3,30 @@ entries:
   garage-ui:
   - apiVersion: v2
     appVersion: v0.1.0
+    created: "2025-12-26T14:38:20.230001238Z"
+    description: A Helm chart for Garage UI - Web interface for Garage S3 object storage
+    digest: 710b943ed63e4321d80984ab9935238d3244dd221cd9c372e9f179222a9b7446
+    home: https://github.com/Noooste/garage-ui
+    icon: https://helm.noste.dev/garage.png
+    keywords:
+    - garage
+    - s3
+    - object-storage
+    - ui
+    - dashboard
+    - web-ui
+    kubeVersion: '>=1.19.0-0'
+    maintainers:
+    - name: Noooste
+    name: garage-ui
+    sources:
+    - https://github.com/Noooste/garage-ui
+    type: application
+    urls:
+    - https://github.com/Noooste/garage-ui/releases/download/garage-ui-0.1.11/garage-ui-0.1.11.tgz
+    version: 0.1.11
+  - apiVersion: v2
+    appVersion: v0.1.0
     created: "2025-12-26T14:31:47.86369677Z"
     description: A Helm chart for Garage UI - Web interface for Garage S3 object storage
     digest: 8b38f8326237ef80389194b811ba5da434ccbff313a050ee9c006b87bab23e23
@@ -260,4 +284,4 @@ entries:
     urls:
     - https://github.com/Noooste/garage-ui/releases/download/garage-ui-0.1.0/garage-ui-0.1.0.tgz
     version: 0.1.0
-generated: "2025-12-26T14:31:47.86374012Z"
+generated: "2025-12-26T14:38:20.230054087Z"
