@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 
@@ -37,9 +38,7 @@ func (h *BucketHandler) ListBuckets(c fiber.Ctx) error {
 	// List all buckets from Garage Admin API
 	adminBuckets, err := h.adminService.ListBuckets(ctx)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeListFailed, "Failed to list buckets: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Convert admin bucket response to BucketInfo
@@ -124,9 +123,7 @@ func (h *BucketHandler) CreateBucket(c fiber.Ctx) error {
 	}
 
 	if _, err := h.adminService.CreateBucket(ctx, createBucketReq); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create bucket: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Return success response
@@ -165,9 +162,7 @@ func (h *BucketHandler) DeleteBucket(c fiber.Ctx) error {
 	// Check if bucket already exists
 	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check bucket existence: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	if bucketInfo == nil {
@@ -178,9 +173,7 @@ func (h *BucketHandler) DeleteBucket(c fiber.Ctx) error {
 
 	// Delete the bucket
 	if err := h.adminService.DeleteBucket(ctx, bucketInfo.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete bucket: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Return success response
@@ -219,9 +212,7 @@ func (h *BucketHandler) GetBucketInfo(c fiber.Ctx) error {
 	// Check if bucket already exists
 	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check bucket existence: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	if bucketInfo == nil {
@@ -276,9 +267,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 	// Get bucket info to retrieve bucket ID
 	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get bucket info: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	if bucketInfo == nil {
@@ -310,9 +299,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 			Permissions: allow,
 		})
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(
-				models.ErrorResponse(models.ErrCodeInternalError, "Failed to grant permissions: "+err.Error()),
-			)
+			return apierr.Respond(c, err)
 		}
 		result = r
 	}
@@ -324,9 +311,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 			Permissions: deny,
 		})
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(
-				models.ErrorResponse(models.ErrCodeInternalError, "Failed to revoke permissions: "+err.Error()),
-			)
+			return apierr.Respond(c, err)
 		}
 		result = r
 	}
@@ -336,9 +321,7 @@ func (h *BucketHandler) GrantBucketPermission(c fiber.Ctx) error {
 		// Fetch current bucket state to return a consistent response.
 		r, err := h.adminService.GetBucketInfo(ctx, bucketInfo.ID)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(
-				models.ErrorResponse(models.ErrCodeInternalError, "Failed to fetch bucket info: "+err.Error()),
-			)
+			return apierr.Respond(c, err)
 		}
 		result = r
 	}
@@ -385,9 +368,7 @@ func (h *BucketHandler) UpdateBucketWebsite(c fiber.Ctx) error {
 
 	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get bucket info: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	if bucketInfo == nil {
@@ -412,9 +393,7 @@ func (h *BucketHandler) UpdateBucketWebsite(c fiber.Ctx) error {
 
 	result, err := h.adminService.UpdateBucket(ctx, bucketInfo.ID, updateReq)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update bucket website: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	return c.JSON(models.SuccessResponse(result))
