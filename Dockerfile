@@ -20,7 +20,7 @@ WORKDIR /app
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go install github.com/swaggo/swag/cmd/swag@latest
+    go install github.com/swaggo/swag/cmd/swag@v1.16.4
 
 COPY backend/go.mod backend/go.sum ./
 
