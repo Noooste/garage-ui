@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/pkg/utils"
@@ -131,7 +132,7 @@ func (s *S3Service) ListBuckets(ctx context.Context) (*models.BucketListResponse
 		return listErr
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list buckets: %w", err)
+		return nil, apierr.FromMinio(err)
 	}
 
 	// Convert MinIO buckets to our model
@@ -164,7 +165,7 @@ func (s *S3Service) CreateBucket(ctx context.Context, bucketName string) error {
 		})
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+		return apierr.FromMinio(err)
 	}
 
 	return nil
@@ -183,7 +184,7 @@ func (s *S3Service) DeleteBucket(ctx context.Context, bucketName string) error {
 		return client.RemoveBucket(ctx, bucketName)
 	})
 	if err != nil {
-		return fmt.Errorf("failed to delete bucket %s: %w", bucketName, err)
+		return apierr.FromMinio(err)
 	}
 
 	return nil
@@ -216,7 +217,7 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, err)
+		return nil, apierr.FromMinio(err)
 	}
 
 	// Drop directory marker objects (zero-byte keys ending in "/"). Garage
@@ -333,7 +334,7 @@ func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, bo
 		return uploadErr
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to upload object %s to bucket %s: %w", key, bucketName, err)
+		return nil, apierr.FromMinio(err)
 	}
 
 	return &models.ObjectUploadResponse{
@@ -366,7 +367,7 @@ func (s *S3Service) CreateDirectoryMarker(ctx context.Context, bucketName, key s
 		return uploadErr
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create directory %s in bucket %s: %w", key, bucketName, err)
+		return nil, apierr.FromMinio(err)
 	}
 
 	return &models.ObjectUploadResponse{
@@ -396,14 +397,14 @@ func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.R
 		return getErr
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get object %s from bucket %s: %w", key, bucketName, err)
+		return nil, nil, apierr.FromMinio(err)
 	}
 
 	// Get object info
 	stat, err := object.Stat()
 	if err != nil {
 		object.Close()
-		return nil, nil, fmt.Errorf("failed to get object info for %s in bucket %s: %w", key, bucketName, err)
+		return nil, nil, apierr.FromMinio(err)
 	}
 
 	// Create object info
@@ -432,7 +433,7 @@ func (s *S3Service) DeleteObject(ctx context.Context, bucketName, key string) er
 		return client.RemoveObject(ctx, bucketName, key, minio.RemoveObjectOptions{})
 	})
 	if err != nil {
-		return fmt.Errorf("failed to delete object %s from bucket %s: %w", key, bucketName, err)
+		return apierr.FromMinio(err)
 	}
 
 	return nil
@@ -461,7 +462,7 @@ func (s *S3Service) ObjectExists(ctx context.Context, bucketName, key string) (b
 		if errResponse.Code == "NoSuchKey" {
 			return false, nil
 		}
-		return false, fmt.Errorf("failed to check if object exists: %w", err)
+		return false, apierr.FromMinio(err)
 	}
 	return true, nil
 }
@@ -484,7 +485,7 @@ func (s *S3Service) GetObjectMetadata(ctx context.Context, bucketName, key strin
 		return statErr
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get metadata for object %s in bucket %s: %w", key, bucketName, err)
+		return nil, apierr.FromMinio(err)
 	}
 
 	return &models.ObjectInfo{
@@ -529,7 +530,7 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 	// Check for errors
 	for err := range errorCh {
 		if err.Err != nil {
-			return fmt.Errorf("failed to delete object %s from bucket %s: %w", err.ObjectName, bucketName, err.Err)
+			return apierr.FromMinio(err.Err)
 		}
 	}
 
