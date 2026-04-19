@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/services/mocks"
@@ -866,5 +867,34 @@ func TestCreateDirectory_ServiceError500(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestDeleteObject_UpstreamNoSuchKey(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.ObjectExistsFn = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
+	s3.DeleteObjectFn = func(_ context.Context, _, _ string) error {
+		return &apierr.UpstreamError{
+			HTTPStatus: 404,
+			Code:       "NoSuchKey",
+			Message:    "The specified key does not exist",
+			Source:     "s3",
+		}
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/buckets/b1/objects/foo.txt", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+	var body models.APIResponse
+	decodeJSON(t, resp.Body, &body)
+	if body.Error == nil || body.Error.Code != models.ErrCodeObjectNotFound {
+		t.Fatalf("error = %+v, want code %s", body.Error, models.ErrCodeObjectNotFound)
+	}
+	if body.Error.Message != "The specified key does not exist" {
+		t.Errorf("message = %q", body.Error.Message)
 	}
 }
