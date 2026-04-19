@@ -91,7 +91,7 @@ func (s *GarageAdminService) ListKeys(ctx context.Context) ([]models.ListKeysRes
 
 	var result []models.ListKeysResponseItem
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return result, nil
@@ -106,7 +106,7 @@ func (s *GarageAdminService) CreateKey(ctx context.Context, req models.CreateKey
 
 	var result models.GarageKeyInfo
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -126,7 +126,7 @@ func (s *GarageAdminService) GetKeyInfo(ctx context.Context, keyID string, showS
 
 	var result models.GarageKeyInfo
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -143,7 +143,7 @@ func (s *GarageAdminService) UpdateKey(ctx context.Context, keyID string, req mo
 
 	var result models.GarageKeyInfo
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -159,7 +159,7 @@ func (s *GarageAdminService) DeleteKey(ctx context.Context, keyID string) error 
 	}
 
 	if err := decodeResponse(resp, nil); err != nil {
-		return fmt.Errorf("failed to process response: %w", err)
+		return err
 	}
 
 	return nil
@@ -174,7 +174,7 @@ func (s *GarageAdminService) ImportKey(ctx context.Context, req models.ImportKey
 
 	var result models.GarageKeyInfo
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -205,7 +205,7 @@ func (s *GarageAdminService) ListBuckets(ctx context.Context) ([]models.ListBuck
 			Float64("duration_ms", msSince(start)).
 			Str("outcome", "failure").
 			Msg("garage list_buckets decode failed")
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	log.Debug().
@@ -236,7 +236,7 @@ func (s *GarageAdminService) GetBucketInfo(ctx context.Context, bucketID string)
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage get_bucket_info decode failed")
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	log.Debug().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("got bucket info")
@@ -263,7 +263,7 @@ func (s *GarageAdminService) GetBucketInfoByAlias(ctx context.Context, globalAli
 	var result models.GarageBucketInfo
 	if err = decodeResponse(resp, &result); err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage get_bucket_info_by_alias decode failed")
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	log.Debug().Float64("duration_ms", msSince(start)).Str("outcome", "success").Str("bucket_id", result.ID).Msg("got bucket info by alias")
@@ -294,7 +294,7 @@ func (s *GarageAdminService) CreateBucket(ctx context.Context, req models.Create
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage create_bucket decode failed")
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Str("bucket_id", result.ID).Msg("bucket created")
@@ -321,7 +321,7 @@ func (s *GarageAdminService) UpdateBucket(ctx context.Context, bucketID string, 
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage update_bucket decode failed")
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("bucket updated")
@@ -347,7 +347,7 @@ func (s *GarageAdminService) DeleteBucket(ctx context.Context, bucketID string) 
 
 	if err := decodeResponse(resp, nil); err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage delete_bucket decode failed")
-		return fmt.Errorf("failed to process response: %w", err)
+		return err
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("bucket deleted")
@@ -363,7 +363,7 @@ func (s *GarageAdminService) AddBucketAlias(ctx context.Context, req models.AddB
 
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -378,7 +378,7 @@ func (s *GarageAdminService) RemoveBucketAlias(ctx context.Context, req models.R
 
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -408,7 +408,7 @@ func (s *GarageAdminService) AllowBucketKey(ctx context.Context, req models.Buck
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
 		log.Error().Err(err).Float64("duration_ms", msSince(start)).Str("outcome", "failure").Msg("garage allow_bucket_key decode failed")
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	log.Info().Float64("duration_ms", msSince(start)).Str("outcome", "success").Msg("bucket key permissions granted")
@@ -424,7 +424,7 @@ func (s *GarageAdminService) DenyBucketKey(ctx context.Context, req models.Bucke
 
 	var result models.GarageBucketInfo
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -439,7 +439,7 @@ func (s *GarageAdminService) GetClusterHealth(ctx context.Context) (*models.Clus
 
 	var result models.ClusterHealth
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -454,7 +454,7 @@ func (s *GarageAdminService) GetClusterStatus(ctx context.Context) (*models.Clus
 
 	var result models.ClusterStatus
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -469,7 +469,7 @@ func (s *GarageAdminService) GetClusterStatistics(ctx context.Context) (*models.
 
 	var result models.ClusterStatistics
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -486,7 +486,7 @@ func (s *GarageAdminService) GetNodeInfo(ctx context.Context, nodeID string) (*m
 
 	var result models.MultiNodeResponse
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -503,7 +503,7 @@ func (s *GarageAdminService) GetNodeStatistics(ctx context.Context, nodeID strin
 
 	var result models.MultiNodeResponse
 	if err := decodeResponse(resp, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, err
 	}
 
 	return &result, nil
@@ -517,7 +517,7 @@ func (s *GarageAdminService) HealthCheck(ctx context.Context) error {
 	}
 
 	if err := decodeResponse(resp, nil); err != nil {
-		return fmt.Errorf("health check returned error: %w", err)
+		return err
 	}
 
 	return nil
