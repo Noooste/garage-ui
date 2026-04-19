@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 
@@ -122,9 +123,7 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 	// List objects in the bucket
 	objects, err := h.s3Service.ListObjects(ctx, bucketName, prefix, maxKeys, continuationToken)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeListFailed, "Failed to list objects: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	return c.JSON(models.SuccessResponse(objects))
@@ -186,9 +185,7 @@ func (h *ObjectHandler) UploadObject(c fiber.Ctx) error {
 	// Upload to Garage
 	uploadResult, err := h.s3Service.UploadObject(ctx, bucketName, key, fileHandle, contentType)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to upload object: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(models.SuccessResponse(uploadResult))
@@ -238,9 +235,7 @@ func (h *ObjectHandler) CreateDirectory(c fiber.Ctx) error {
 
 	result, err := h.s3Service.CreateDirectoryMarker(ctx, bucketName, key)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to create directory: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(models.SuccessResponse(result))
@@ -281,9 +276,7 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 	// Get object from Garage
 	body, objectInfo, err := h.s3Service.GetObject(ctx, bucketName, key)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(
-			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// The uploader controls Content-Type. Rewrite executable MIME types to
@@ -345,9 +338,7 @@ func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 	// Check if object exists
 	exists, err := h.s3Service.ObjectExists(ctx, bucketName, key)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check object existence: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	if !exists {
@@ -358,9 +349,7 @@ func (h *ObjectHandler) DeleteObject(c fiber.Ctx) error {
 
 	// Delete the object
 	if err := h.s3Service.DeleteObject(ctx, bucketName, key); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete object: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Return success response
@@ -407,9 +396,7 @@ func (h *ObjectHandler) GetObjectMetadata(c fiber.Ctx) error {
 	// Get object metadata
 	metadata, err := h.s3Service.GetObjectMetadata(ctx, bucketName, key)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(
-			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	return c.JSON(models.SuccessResponse(metadata))
@@ -467,9 +454,7 @@ func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 	// Check if object exists
 	exists, err := h.s3Service.ObjectExists(ctx, bucketName, key)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to check object existence: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	if !exists {
@@ -481,9 +466,7 @@ func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 	// Generate pre-signed URL
 	url, err := h.s3Service.GetPresignedURL(ctx, bucketName, key, time.Duration(expiresIn)*time.Second)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to generate pre-signed URL: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	response := models.PresignedURLResponse{
@@ -540,9 +523,7 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 
 	// Delete multiple objects
 	if err := h.s3Service.DeleteMultipleObjects(ctx, bucketName, req.Keys); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete objects: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	response := models.ObjectDeleteMultipleResponse{

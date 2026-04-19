@@ -144,18 +144,20 @@ func TestGetObjectMetadata_Success(t *testing.T) {
 	}
 }
 
-func TestGetObjectMetadata_NotFound404(t *testing.T) {
+func TestGetObjectMetadata_ServiceError500(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
 	s3.GetObjectMetadataFn = func(_ context.Context, _, _ string) (*models.ObjectInfo, error) {
-		return nil, errors.New("not found")
+		return nil, errors.New("boom")
 	}
 	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/nope/metadata", nil))
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	// Generic errors map to 500/INTERNAL_ERROR; typed upstream NoSuchKey → 404
+	// is covered by Task 12 tests.
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 
@@ -363,18 +365,20 @@ func TestGetObject_DownloadQuerySetsAttachment(t *testing.T) {
 	}
 }
 
-func TestGetObject_ServiceErrorReturns404(t *testing.T) {
+func TestGetObject_ServiceErrorReturns500(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
 	s3.GetObjectFn = func(_ context.Context, _, _ string) (io.ReadCloser, *models.ObjectInfo, error) {
-		return nil, nil, errors.New("not found")
+		return nil, nil, errors.New("boom")
 	}
 	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/nope", nil))
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	// Generic errors map to 500/INTERNAL_ERROR; typed upstream NoSuchKey → 404
+	// is covered by Task 12 tests.
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 
