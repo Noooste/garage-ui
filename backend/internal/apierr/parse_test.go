@@ -2,11 +2,13 @@ package apierr
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/Noooste/azuretls-client"
+	"github.com/minio/minio-go/v7"
 )
 
 func fakeResp(status int, body string) *azuretls.Response {
@@ -75,5 +77,58 @@ func TestParseGarage_EmptyBody(t *testing.T) {
 	}
 	if ue.HTTPStatus != 502 {
 		t.Errorf("HTTPStatus = %d, want 502", ue.HTTPStatus)
+	}
+}
+
+func TestFromMinio_NilInput(t *testing.T) {
+	if got := FromMinio(nil); got != nil {
+		t.Fatalf("FromMinio(nil) = %v, want nil", got)
+	}
+}
+
+func TestFromMinio_MinioErrorResponse(t *testing.T) {
+	in := minio.ErrorResponse{
+		StatusCode: 404,
+		Code:       "NoSuchBucket",
+		Message:    "The specified bucket does not exist",
+		BucketName: "missing",
+	}
+	got := FromMinio(in)
+	if got == nil {
+		t.Fatal("FromMinio returned nil")
+	}
+	if got.HTTPStatus != 404 {
+		t.Errorf("HTTPStatus = %d, want 404", got.HTTPStatus)
+	}
+	if got.Code != "NoSuchBucket" {
+		t.Errorf("Code = %q, want NoSuchBucket", got.Code)
+	}
+	if got.Message != "The specified bucket does not exist" {
+		t.Errorf("Message = %q", got.Message)
+	}
+	if got.Source != "s3" {
+		t.Errorf("Source = %q, want s3", got.Source)
+	}
+	if got.Details["bucket"] != "missing" {
+		t.Errorf("Details[bucket] = %q, want missing", got.Details["bucket"])
+	}
+}
+
+func TestFromMinio_NonMinioError(t *testing.T) {
+	got := FromMinio(errors.New("connection refused"))
+	if got == nil {
+		t.Fatal("FromMinio returned nil")
+	}
+	if got.HTTPStatus != 500 {
+		t.Errorf("HTTPStatus = %d, want 500", got.HTTPStatus)
+	}
+	if got.Code != "" {
+		t.Errorf("Code = %q, want empty", got.Code)
+	}
+	if !strings.Contains(got.Message, "connection refused") {
+		t.Errorf("Message = %q", got.Message)
+	}
+	if got.Source != "s3" {
+		t.Errorf("Source = %q, want s3", got.Source)
 	}
 }

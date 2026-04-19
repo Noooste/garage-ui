@@ -2,9 +2,11 @@ package apierr
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 
 	"github.com/Noooste/azuretls-client"
+	"github.com/minio/minio-go/v7"
 )
 
 // garageErrBody mirrors Garage's JSON error envelope.
@@ -50,4 +52,41 @@ func ParseGarage(resp *azuretls.Response) error {
 		ue.Message = string(bodyBytes)
 	}
 	return ue
+}
+
+// FromMinio converts a MinIO/S3 error into an *UpstreamError. Returns nil when
+// err is nil. If err is not a minio.ErrorResponse (e.g. a network error), a
+// generic 500 *UpstreamError is returned with the raw error string as Message.
+func FromMinio(err error) *UpstreamError {
+	if err == nil {
+		return nil
+	}
+
+	var mer minio.ErrorResponse
+	if errors.As(err, &mer) {
+		details := map[string]string{}
+		if mer.BucketName != "" {
+			details["bucket"] = mer.BucketName
+		}
+		if mer.Key != "" {
+			details["key"] = mer.Key
+		}
+		status := mer.StatusCode
+		if status == 0 {
+			status = 500
+		}
+		return &UpstreamError{
+			HTTPStatus: status,
+			Code:       mer.Code,
+			Message:    mer.Message,
+			Source:     "s3",
+			Details:    details,
+		}
+	}
+
+	return &UpstreamError{
+		HTTPStatus: 500,
+		Source:     "s3",
+		Message:    err.Error(),
+	}
 }
