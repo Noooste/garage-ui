@@ -1,6 +1,7 @@
 package services
 
 import (
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/pkg/utils"
@@ -63,13 +64,14 @@ func (s *GarageAdminService) doRequest(ctx context.Context, method, path string,
 	return resp, nil
 }
 
-// decodeResponse decodes a JSON response into the target structure
+// decodeResponse decodes a JSON response into the target structure. Non-2xx
+// responses are converted to *apierr.UpstreamError (Source="garage") so the
+// handler layer can map them to the correct API error code and HTTP status.
 func decodeResponse(resp *azuretls.Response, target interface{}) error {
 	defer resp.RawBody.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.RawBody)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	if err := apierr.ParseGarage(resp); err != nil {
+		return err
 	}
 
 	if target != nil {
@@ -77,7 +79,6 @@ func decodeResponse(resp *azuretls.Response, target interface{}) error {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}
-
 	return nil
 }
 
