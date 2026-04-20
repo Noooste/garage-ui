@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
 )
@@ -103,8 +105,12 @@ func TestHealthCheck_Non2xxReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 503, got nil")
 	}
-	if !strings.Contains(err.Error(), "503") {
-		t.Errorf("error should mention status code, got %v", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Fatalf("expected *apierr.UpstreamError, got %T (%v)", err, err)
+	}
+	if ue.HTTPStatus != http.StatusServiceUnavailable {
+		t.Errorf("HTTPStatus = %d, want %d", ue.HTTPStatus, http.StatusServiceUnavailable)
 	}
 }
 
@@ -509,8 +515,15 @@ func TestDoRequest_Non2xxBodyEchoedInError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 400, got nil")
 	}
-	if !strings.Contains(err.Error(), "400") || !strings.Contains(err.Error(), "bad request") {
-		t.Errorf("error %v should contain 400 and the response body", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Fatalf("expected *apierr.UpstreamError, got %T (%v)", err, err)
+	}
+	if ue.HTTPStatus != http.StatusBadRequest {
+		t.Errorf("HTTPStatus = %d, want %d", ue.HTTPStatus, http.StatusBadRequest)
+	}
+	if !strings.Contains(ue.Message, "bad request") {
+		t.Errorf("Message = %q, want it to contain the response body", ue.Message)
 	}
 }
 

@@ -196,4 +196,7 @@ const (
 	ErrCodeUploadFailed      = "UPLOAD_FAILED"
 	ErrCodeDeleteFailed      = "DELETE_FAILED"
 	ErrCodeListFailed        = "LIST_FAILED"
+	ErrCodeBucketNotEmpty    = "BUCKET_NOT_EMPTY"
+	ErrCodeKeyNotFound       = "KEY_NOT_FOUND"
+	ErrCodeInvalidRequest    = "INVALID_REQUEST"
 )

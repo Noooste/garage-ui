@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services/mocks"
 
@@ -363,5 +364,33 @@ func TestUpdateUser_AdminError500(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestDeleteUser_UpstreamAccessDenied(t *testing.T) {
+	app, admin := newUsersTestApp(t)
+	admin.DeleteKeyFn = func(_ context.Context, _ string) error {
+		return &apierr.UpstreamError{
+			HTTPStatus: 403,
+			Code:       "AccessDenied",
+			Message:    "permission denied",
+			Source:     "garage",
+		}
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/users/abc", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+	var body models.APIResponse
+	decodeJSON(t, resp.Body, &body)
+	if body.Error == nil || body.Error.Code != models.ErrCodeForbidden {
+		t.Fatalf("error = %+v, want code %s", body.Error, models.ErrCodeForbidden)
+	}
+	if body.Error.Message != "permission denied" {
+		t.Errorf("message = %q", body.Error.Message)
 	}
 }

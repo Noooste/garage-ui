@@ -3,6 +3,7 @@ package handlers
 import (
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 
@@ -35,9 +36,7 @@ func (h *UserHandler) ListUsers(c fiber.Ctx) error {
 
 	keys, err := h.adminService.ListKeys(ctx)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to list users: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Convert to UserInfo format
@@ -135,9 +134,7 @@ func (h *UserHandler) CreateUser(c fiber.Ctx) error {
 	// Create the key
 	keyInfo, err := h.adminService.CreateKey(ctx, createReq)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create user: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Convert bucket permissions to frontend format
@@ -188,9 +185,7 @@ func (h *UserHandler) DeleteUser(c fiber.Ctx) error {
 	// Delete the key
 	err := h.adminService.DeleteKey(ctx, accessKey)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to delete user: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	return c.JSON(models.SuccessResponse(map[string]interface{}{
@@ -223,9 +218,7 @@ func (h *UserHandler) GetUser(c fiber.Ctx) error {
 	// Get key information (without secret key)
 	keyInfo, err := h.adminService.GetKeyInfo(ctx, accessKey, false)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get user info: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Convert bucket permissions to frontend format
@@ -275,9 +268,7 @@ func (h *UserHandler) GetUserSecretKey(c fiber.Ctx) error {
 	// Get key information WITH secret key
 	keyInfo, err := h.adminService.GetKeyInfo(ctx, accessKey, true)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get secret key: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Return only the secret key
@@ -347,9 +338,7 @@ func (h *UserHandler) UpdateUserPermissions(c fiber.Ctx) error {
 	// Update the key
 	keyInfo, err := h.adminService.UpdateKey(ctx, accessKey, updateReq)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(
-			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update user: "+err.Error()),
-		)
+		return apierr.Respond(c, err)
 	}
 
 	// Convert bucket permissions to frontend format

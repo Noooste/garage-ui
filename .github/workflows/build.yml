@@ -14,9 +14,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
+        include:
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: arm64
 
     steps:
       - name: Checkout repository
@@ -52,8 +54,12 @@ jobs:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: VERSION=${{ steps.meta.outputs.version }}
-          cache-from: type=gha,scope=build-${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
+          cache-from: |
+            type=gha,scope=build-${{ matrix.arch }}
+            type=registry,ref=${{ secrets.DOCKER_REGISTRY }}:buildcache-${{ matrix.arch }}
+          cache-to: |
+            type=gha,mode=max,scope=build-${{ matrix.arch }}
+            type=registry,ref=${{ secrets.DOCKER_REGISTRY }}:buildcache-${{ matrix.arch }},mode=max
           outputs: type=image,name=${{ secrets.DOCKER_REGISTRY }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest

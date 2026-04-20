@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/pkg/utils"
@@ -105,8 +107,9 @@ func TestS3_ListBuckets_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from ListBuckets, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to list buckets") {
-		t.Errorf("error %v should wrap 'failed to list buckets'", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 
@@ -122,8 +125,9 @@ func TestS3_CreateBucket_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to create bucket") {
-		t.Errorf("error = %v, want wrap 'failed to create bucket'", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 
@@ -138,8 +142,9 @@ func TestS3_DeleteBucket_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to delete bucket") {
-		t.Errorf("error = %v", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 
@@ -154,8 +159,9 @@ func TestS3_ListObjects_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from ListObjects, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to list objects") {
-		t.Errorf("error = %v", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 
@@ -170,8 +176,9 @@ func TestS3_UploadObject_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to upload object") {
-		t.Errorf("error = %v", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 
@@ -186,8 +193,9 @@ func TestS3_CreateDirectoryMarker_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to create directory") {
-		t.Errorf("error = %v", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 
@@ -215,8 +223,9 @@ func TestS3_DeleteObject_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to delete object") {
-		t.Errorf("error = %v", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 
@@ -260,8 +269,9 @@ func TestS3_GetObjectMetadata_ServerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to get metadata") {
-		t.Errorf("error = %v", err)
+	var ue *apierr.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Errorf("expected *apierr.UpstreamError, got %T: %v", err, err)
 	}
 }
 

@@ -15,6 +15,7 @@ services:
       start_period: 2s
 
   backend:
+    image: garage-ui-smoke-backend:ci
     build:
       context: ../../..
       dockerfile: Dockerfile

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/services/mocks"
@@ -144,18 +145,20 @@ func TestGetObjectMetadata_Success(t *testing.T) {
 	}
 }
 
-func TestGetObjectMetadata_NotFound404(t *testing.T) {
+func TestGetObjectMetadata_ServiceError500(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
 	s3.GetObjectMetadataFn = func(_ context.Context, _, _ string) (*models.ObjectInfo, error) {
-		return nil, errors.New("not found")
+		return nil, errors.New("boom")
 	}
 	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/nope/metadata", nil))
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	// Generic errors map to 500/INTERNAL_ERROR; typed upstream NoSuchKey → 404
+	// is covered by Task 12 tests.
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 
@@ -363,18 +366,20 @@ func TestGetObject_DownloadQuerySetsAttachment(t *testing.T) {
 	}
 }
 
-func TestGetObject_ServiceErrorReturns404(t *testing.T) {
+func TestGetObject_ServiceErrorReturns500(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
 	s3.GetObjectFn = func(_ context.Context, _, _ string) (io.ReadCloser, *models.ObjectInfo, error) {
-		return nil, nil, errors.New("not found")
+		return nil, nil, errors.New("boom")
 	}
 	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/nope", nil))
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	// Generic errors map to 500/INTERNAL_ERROR; typed upstream NoSuchKey → 404
+	// is covered by Task 12 tests.
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 
@@ -862,5 +867,34 @@ func TestCreateDirectory_ServiceError500(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestDeleteObject_UpstreamNoSuchKey(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.ObjectExistsFn = func(_ context.Context, _, _ string) (bool, error) { return true, nil }
+	s3.DeleteObjectFn = func(_ context.Context, _, _ string) error {
+		return &apierr.UpstreamError{
+			HTTPStatus: 404,
+			Code:       "NoSuchKey",
+			Message:    "The specified key does not exist",
+			Source:     "s3",
+		}
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/buckets/b1/objects/foo.txt", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+	var body models.APIResponse
+	decodeJSON(t, resp.Body, &body)
+	if body.Error == nil || body.Error.Code != models.ErrCodeObjectNotFound {
+		t.Fatalf("error = %+v, want code %s", body.Error, models.ErrCodeObjectNotFound)
+	}
+	if body.Error.Message != "The specified key does not exist" {
+		t.Errorf("message = %q", body.Error.Message)
 	}
 }

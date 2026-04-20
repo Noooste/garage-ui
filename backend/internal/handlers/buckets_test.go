@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"Noooste/garage-ui/internal/apierr"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services/mocks"
 
@@ -424,5 +425,39 @@ func TestUpdateBucketWebsite_Disable(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteBucket_UpstreamBucketNotEmpty(t *testing.T) {
+	app, admin := newBucketsTestApp(t)
+	admin.GetBucketInfoByAliasFn = func(_ context.Context, _ string) (*models.GarageBucketInfo, error) {
+		return &models.GarageBucketInfo{ID: "id-1"}, nil
+	}
+	admin.DeleteBucketFn = func(_ context.Context, _ string) error {
+		return &apierr.UpstreamError{
+			HTTPStatus: 409,
+			Code:       "BucketNotEmpty",
+			Message:    "Tried to delete a non-empty bucket",
+			Source:     "garage",
+		}
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/buckets/alpha", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	}
+	var body models.APIResponse
+	decodeJSON(t, resp.Body, &body)
+	if body.Error == nil {
+		t.Fatal("error missing from response body")
+	}
+	if body.Error.Code != models.ErrCodeBucketNotEmpty {
+		t.Errorf("code = %q, want %s", body.Error.Code, models.ErrCodeBucketNotEmpty)
+	}
+	if body.Error.Message != "Tried to delete a non-empty bucket" {
+		t.Errorf("message = %q", body.Error.Message)
 	}
 }
