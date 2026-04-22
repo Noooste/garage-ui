@@ -16,6 +16,7 @@ interface AuthStore extends AuthState {
   // Async actions
   initialize: () => Promise<void>;
   loginAdmin: (username: string, password: string) => Promise<void>;
+  loginToken: (token: string) => Promise<void>;
   loginOIDC: () => void;
   logout: () => Promise<void>;
 }
@@ -45,7 +46,7 @@ export const useAuthStore = create<AuthStore>()(
           set({ config });
 
           // If no auth is enabled, mark as authenticated immediately
-          if (!config.admin.enabled && !config.oidc.enabled) {
+          if (!config.admin.enabled && !config.oidc.enabled && !config.token.enabled) {
             set({
               isAuthenticated: true,
               isLoading: false,
@@ -110,6 +111,36 @@ export const useAuthStore = create<AuthStore>()(
             user: null
           });
           throw error; // Re-throw for form handling
+        }
+      },
+
+      loginToken: async (token) => {
+        try {
+          set({ isLoading: true, error: null });
+
+          const response = await authApi.loginToken(token);
+          const { token: sessionToken, user } = response.data;
+
+          localStorage.setItem('auth-token', sessionToken);
+
+          set({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        } catch (error) {
+          const errorMessage =
+            (error as { response?: { data?: { error?: { message?: string } } } })
+              .response?.data?.error?.message ||
+            (error instanceof Error ? error.message : 'Login failed');
+          set({
+            error: errorMessage,
+            isLoading: false,
+            isAuthenticated: false,
+            user: null,
+          });
+          throw error;
         }
       },
 

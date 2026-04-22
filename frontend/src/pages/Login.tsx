@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth-store';
 import { BasicLoginForm } from '@/components/auth/BasicLoginForm';
 import { OIDCLoginView } from '@/components/auth/OIDCLoginView';
+import { TokenLoginForm } from '@/components/auth/TokenLoginForm';
 import { LoadingSpinner } from '@/components/auth/LoadingSpinner';
 
 export function Login() {
@@ -14,9 +15,7 @@ export function Login() {
   const returnUrl = searchParams.get('returnUrl') || '/';
 
   useEffect(() => {
-    // Handle OIDC callback
     if (loginSuccess === 'success') {
-      // OIDC login successful, re-initialize auth to fetch user
       initialize().then(() => {
         navigate(decodeURIComponent(returnUrl));
       });
@@ -24,7 +23,6 @@ export function Login() {
   }, [loginSuccess, initialize, navigate, returnUrl]);
 
   useEffect(() => {
-    // If already authenticated, redirect to return URL
     if (isAuthenticated && !loginSuccess) {
       navigate(decodeURIComponent(returnUrl));
     }
@@ -35,16 +33,27 @@ export function Login() {
   }
 
   // No auth enabled, redirect to dashboard immediately
-  if (config && !config.admin.enabled && !config.oidc.enabled) {
+  if (config && !config.admin.enabled && !config.oidc.enabled && !config.token.enabled) {
     navigate('/');
     return null;
   }
 
-  // Show login options based on what's enabled
   const showAdmin = config?.admin.enabled || false;
   const showOIDC = config?.oidc.enabled || false;
+  const showToken = config?.token.enabled || false;
 
-  // If both are enabled, show both options in single modal
+  // Token-only auth (zero-config fallback)
+  if (showToken && !showAdmin && !showOIDC) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md">
+          <TokenLoginForm />
+        </div>
+      </div>
+    );
+  }
+
+  // Both admin and OIDC enabled
   if (showAdmin && showOIDC) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -55,12 +64,12 @@ export function Login() {
     );
   }
 
-  // Show only OIDC if enabled
+  // Only OIDC
   if (showOIDC) {
     return <OIDCLoginView />;
   }
 
-  // Show only admin if enabled
+  // Only admin
   if (showAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -71,6 +80,5 @@ export function Login() {
     );
   }
 
-  // Still loading config
   return <LoadingSpinner />;
 }

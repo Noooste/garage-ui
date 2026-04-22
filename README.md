@@ -27,7 +27,8 @@ A web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) object st
 - Bucket and object management
 - User access control
 - Cluster monitoring
-- Multiple authentication options (none/basic/OIDC)
+- Multiple authentication options (none/basic/OIDC/token)
+- Direct `garage.toml` reading for zero-config setup
 - Drag-and-drop file uploads
 
 ## Quick Start
@@ -77,6 +78,39 @@ docker compose up -d garage-ui
 ```
 
 Access at http://localhost:8080
+
+### Quick Start with garage.toml
+
+If you already have a running Garage instance, you can point Garage UI directly at your `garage.toml` -- no `config.yaml` needed:
+
+```bash
+./garage-ui --garage-toml /etc/garage.toml
+```
+
+Garage UI reads the S3 endpoint, admin endpoint, admin token, and S3 region straight from the TOML file. When no authentication method is explicitly configured, **token auth auto-enables**: the login page asks for the Garage admin token, giving you a login wall with zero extra config.
+
+**Bind address handling:** Wildcard addresses like `0.0.0.0` or `[::]` are converted to `127.0.0.1` so the UI can reach Garage on localhost. Inside containers this won't work -- override the endpoint explicitly with environment variables or a config file.
+
+**Docker:**
+
+```bash
+docker run -d -p 8080:8080 \
+  -v /etc/garage.toml:/etc/garage.toml:ro \
+  -e GARAGE_UI_GARAGE_TOML=/etc/garage.toml \
+  -e GARAGE_UI_GARAGE_ENDPOINT=http://garage:3900 \
+  -e GARAGE_UI_GARAGE_ADMIN_ENDPOINT=http://garage:3903 \
+  noooste/garage-ui:latest
+```
+
+The endpoint overrides are needed because the container cannot reach `127.0.0.1` on the host.
+
+**Combining flags:** Use `--garage-toml` for Garage connection values and `--config` for everything else (auth, CORS, logging, etc.):
+
+```bash
+./garage-ui --garage-toml /etc/garage.toml --config config.yaml
+```
+
+**Precedence order** (highest wins): built-in defaults < `garage.toml` < `config.yaml` < environment variables.
 
 ## Configuration
 

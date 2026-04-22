@@ -374,6 +374,130 @@ func TestIsDevelopment(t *testing.T) {
 	}
 }
 
+func writeToml(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "garage.toml")
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write toml: %v", err)
+	}
+	return path
+}
+
+const testGarageToml = `
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "toml-token"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "garage"
+`
+
+func TestLoad_GarageTomlOnly(t *testing.T) {
+	resetViper(t)
+	tomlPath := writeToml(t, testGarageToml)
+	missingYaml := filepath.Join(t.TempDir(), "nope.yaml")
+
+	cfg, err := Load(missingYaml, WithGarageToml(tomlPath))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Garage.AdminToken != "toml-token" {
+		t.Errorf("AdminToken = %q, want toml-token", cfg.Garage.AdminToken)
+	}
+	if cfg.Garage.Endpoint != "http://127.0.0.1:3900" {
+		t.Errorf("Endpoint = %q, want http://127.0.0.1:3900", cfg.Garage.Endpoint)
+	}
+	if cfg.Garage.AdminEndpoint != "http://127.0.0.1:3903" {
+		t.Errorf("AdminEndpoint = %q, want http://127.0.0.1:3903", cfg.Garage.AdminEndpoint)
+	}
+	if cfg.Garage.Region != "garage" {
+		t.Errorf("Region = %q, want garage", cfg.Garage.Region)
+	}
+}
+
+func TestLoad_YAMLOverridesToml(t *testing.T) {
+	resetViper(t)
+	tomlPath := writeToml(t, testGarageToml)
+	yaml := `
+server:
+  host: "0.0.0.0"
+  port: 8080
+garage:
+  endpoint: http://custom:3900
+  admin_endpoint: http://custom:3903
+  admin_token: yaml-wins
+`
+	yamlPath := writeConfigFile(t, yaml)
+
+	cfg, err := Load(yamlPath, WithGarageToml(tomlPath))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Garage.AdminToken != "yaml-wins" {
+		t.Errorf("AdminToken = %q, want yaml-wins (yaml overrides toml)", cfg.Garage.AdminToken)
+	}
+	if cfg.Garage.Endpoint != "http://custom:3900" {
+		t.Errorf("Endpoint = %q, want http://custom:3900", cfg.Garage.Endpoint)
+	}
+}
+
+func TestLoad_EnvOverridesToml(t *testing.T) {
+	resetViper(t)
+	tomlPath := writeToml(t, testGarageToml)
+	missingYaml := filepath.Join(t.TempDir(), "nope.yaml")
+	t.Setenv("GARAGE_UI_GARAGE_ADMIN_TOKEN", "env-wins")
+
+	cfg, err := Load(missingYaml, WithGarageToml(tomlPath))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Garage.AdminToken != "env-wins" {
+		t.Errorf("AdminToken = %q, want env-wins (env overrides toml)", cfg.Garage.AdminToken)
+	}
+}
+
+func TestValidate_TokenAuthAutoEnabled(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.ResolveTokenAuth()
+	if !cfg.Auth.Token.Enabled {
+		t.Error("expected token auth to be auto-enabled when no other auth is configured")
+	}
+}
+
+func TestValidate_TokenAuthNotAutoEnabledWhenAdminEnabled(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Auth.Admin.Enabled = true
+	cfg.Auth.Admin.Username = "u"
+	cfg.Auth.Admin.Password = "p"
+	cfg.ResolveTokenAuth()
+	if cfg.Auth.Token.Enabled {
+		t.Error("expected token auth to stay disabled when admin auth is configured")
+	}
+}
+
+func TestValidate_TokenAuthNotAutoEnabledWhenOIDCEnabled(t *testing.T) {
+	cfg := validBaseConfig()
+	applyValidOIDC(&cfg)
+	cfg.ResolveTokenAuth()
+	if cfg.Auth.Token.Enabled {
+		t.Error("expected token auth to stay disabled when OIDC is configured")
+	}
+}
+
+func TestValidate_TokenAuthExplicitlyEnabled(t *testing.T) {
+	cfg := validBaseConfig()
+	cfg.Auth.Admin.Enabled = true
+	cfg.Auth.Admin.Username = "u"
+	cfg.Auth.Admin.Password = "p"
+	cfg.Auth.Token.Enabled = true
+	cfg.ResolveTokenAuth()
+	if !cfg.Auth.Token.Enabled {
+		t.Error("expected token auth to stay enabled when explicitly set")
+	}
+}
+
 func TestIsProduction(t *testing.T) {
 	tests := []struct {
 		env  string

@@ -46,6 +46,7 @@ type GarageConfig struct {
 type AuthConfig struct {
 	Admin      AdminAuthConfig `mapstructure:"admin"`
 	OIDC       OIDCConfig      `mapstructure:"oidc"`
+	Token      TokenAuthConfig `mapstructure:"token"`
 	JWTPrivKey string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
 }
 
@@ -54,6 +55,12 @@ type AdminAuthConfig struct {
 	Enabled  bool   `mapstructure:"enabled"`
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
+}
+
+// TokenAuthConfig contains admin token authentication settings.
+// When enabled, users can log in using the Garage admin token.
+type TokenAuthConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // OIDCConfig contains OIDC authentication settings
@@ -95,8 +102,28 @@ type LoggingConfig struct {
 	Format string `mapstructure:"format"`
 }
 
+// LoadOption configures optional behaviour of Load.
+type LoadOption func(*loadOptions)
+
+type loadOptions struct {
+	garageTomlPath string
+}
+
+// WithGarageToml tells Load to parse a garage.toml file and use its values as
+// lowest-priority defaults (below YAML, below env vars).
+func WithGarageToml(path string) LoadOption {
+	return func(o *loadOptions) {
+		o.garageTomlPath = path
+	}
+}
+
 // Load reads the configuration from the specified file
-func Load(configPath string) (*Config, error) {
+func Load(configPath string, opts ...LoadOption) (*Config, error) {
+	var lo loadOptions
+	for _, fn := range opts {
+		fn(&lo)
+	}
+
 	// Set default config file name if not specified
 	if configPath == "" {
 		configPath = "config.yaml"
@@ -105,6 +132,28 @@ func Load(configPath string) (*Config, error) {
 	// Configure viper to read the config file
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType("yaml")
+
+	// Built-in defaults (lowest priority)
+	viper.SetDefault("server.host", "0.0.0.0")
+	viper.SetDefault("server.port", 8080)
+	viper.SetDefault("server.environment", "production")
+	viper.SetDefault("garage.force_path_style", true)
+	viper.SetDefault("logging.level", "info")
+	viper.SetDefault("logging.format", "text")
+
+	// If garage.toml path is provided, parse it and set values as viper
+	// defaults. Defaults sit below config-file and env-var values in viper's
+	// priority order, so YAML and env vars will still win.
+	if lo.garageTomlPath != "" {
+		tomlResult, err := ParseGarageToml(lo.garageTomlPath)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing garage.toml: %w", err)
+		}
+		viper.SetDefault("garage.endpoint", tomlResult.Endpoint)
+		viper.SetDefault("garage.admin_endpoint", tomlResult.AdminEndpoint)
+		viper.SetDefault("garage.admin_token", tomlResult.AdminToken)
+		viper.SetDefault("garage.region", tomlResult.Region)
+	}
 
 	// Allow environment variables to override config values
 	// Environment variables take precedence over config file
@@ -164,6 +213,9 @@ func bindEnvVars() {
 	viper.BindEnv("auth.admin.username", "GARAGE_UI_AUTH_ADMIN_USERNAME")
 	viper.BindEnv("auth.admin.password", "GARAGE_UI_AUTH_ADMIN_PASSWORD")
 	viper.BindEnv("auth.jwt_private_key", "GARAGE_UI_AUTH_JWT_PRIVATE_KEY")
+
+	// Token auth config
+	viper.BindEnv("auth.token.enabled", "GARAGE_UI_AUTH_TOKEN_ENABLED")
 
 	// OIDC config
 	viper.BindEnv("auth.oidc.enabled", "GARAGE_UI_AUTH_OIDC_ENABLED")
@@ -248,6 +300,15 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// ResolveTokenAuth auto-enables token auth when no other auth method is
+// configured, unless it was explicitly set. This ensures the app never
+// starts without a login wall.
+func (c *Config) ResolveTokenAuth() {
+	if !c.Auth.Admin.Enabled && !c.Auth.OIDC.Enabled && !c.Auth.Token.Enabled {
+		c.Auth.Token.Enabled = true
+	}
 }
 
 // GetAddress returns the full server address (host:port)

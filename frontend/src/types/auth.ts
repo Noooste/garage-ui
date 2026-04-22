@@ -6,6 +6,9 @@ export interface AuthConfig {
     enabled: boolean;
     provider?: string;
   };
+  token: {
+    enabled: boolean;
+  };
 }
 
 export interface AuthUser {

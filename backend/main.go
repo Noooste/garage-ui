@@ -64,14 +64,31 @@ var version = "dev"
 func main() {
 	// Parse command-line flags
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
+	garageTomlPath := flag.String("garage-toml", "", "Path to garage.toml file (extracts Garage connection values)")
 	flag.Parse()
 
+	// Env var fallback for --garage-toml
+	if *garageTomlPath == "" {
+		if envPath := os.Getenv("GARAGE_UI_GARAGE_TOML"); envPath != "" {
+			*garageTomlPath = envPath
+		}
+	}
+
+	// Build load options
+	var loadOpts []config.LoadOption
+	if *garageTomlPath != "" {
+		loadOpts = append(loadOpts, config.WithGarageToml(*garageTomlPath))
+	}
+
 	// Load configuration first (before initializing logger)
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.Load(*configPath, loadOpts...)
 	if err != nil {
 		// If config fails to load, use default logger to report the error
 		logger.Get().Fatal().Err(err).Str("config_path", *configPath).Msg("Failed to load configuration")
 	}
+
+	// Auto-enable token auth if no other auth method is configured
+	cfg.ResolveTokenAuth()
 
 	// Initialize logger with configuration from config file
 	logger.Init(logger.Config{
@@ -87,6 +104,13 @@ func main() {
 		Str("environment", cfg.Server.Environment).
 		Msg("Starting Garage UI Backend")
 
+	if *garageTomlPath != "" {
+		logger.Warn().
+			Str("s3_endpoint", cfg.Garage.Endpoint).
+			Str("admin_endpoint", cfg.Garage.AdminEndpoint).
+			Msg("Endpoints inferred from garage.toml bind addresses — override with GARAGE_UI_GARAGE_ENDPOINT / GARAGE_UI_GARAGE_ADMIN_ENDPOINT for remote/container setups")
+	}
+
 	// Initialize services
 	logger.Info().Msg("Initializing Garage Admin service")
 	adminService := services.NewGarageAdminService(&cfg.Garage, cfg.Logging.Level)
@@ -101,6 +125,9 @@ func main() {
 	}
 	if cfg.Auth.OIDC.Enabled {
 		authMethods = append(authMethods, "oidc")
+	}
+	if cfg.Auth.Token.Enabled {
+		authMethods = append(authMethods, "token")
 	}
 	if len(authMethods) == 0 {
 		authMethods = append(authMethods, "none")

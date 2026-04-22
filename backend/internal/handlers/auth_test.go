@@ -250,6 +250,139 @@ func TestLoginAdmin_MalformedJSONReturns400(t *testing.T) {
 	}
 }
 
+func TestLoginToken_Success(t *testing.T) {
+	cfg := &config.Config{
+		Garage: config.GarageConfig{
+			AdminToken:    "test-admin-token",
+			Endpoint:      "http://g:3900",
+			AdminEndpoint: "http://g:3903",
+		},
+		Auth: config.AuthConfig{
+			Token: config.TokenAuthConfig{Enabled: true},
+		},
+	}
+	svc := newAuthTestService(t, cfg.Auth.Admin)
+	h := NewAuthHandler(cfg, svc)
+	app := fiber.New()
+	app.Post("/auth/login-token", h.LoginToken)
+
+	body := `{"token":"test-admin-token"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/login-token", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200\nbody: %s", resp.StatusCode, raw)
+	}
+
+	var decoded struct {
+		Success bool   `json:"success"`
+		Token   string `json:"token"`
+		User    struct {
+			Username string `json:"username"`
+		} `json:"user"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !decoded.Success {
+		t.Error("success = false")
+	}
+	if decoded.Token == "" {
+		t.Error("token empty")
+	}
+	if decoded.User.Username != "admin-token" {
+		t.Errorf("username = %q, want admin-token", decoded.User.Username)
+	}
+}
+
+func TestLoginToken_WrongToken(t *testing.T) {
+	cfg := &config.Config{
+		Garage: config.GarageConfig{
+			AdminToken:    "test-admin-token",
+			Endpoint:      "http://g:3900",
+			AdminEndpoint: "http://g:3903",
+		},
+		Auth: config.AuthConfig{
+			Token: config.TokenAuthConfig{Enabled: true},
+		},
+	}
+	svc := newAuthTestService(t, cfg.Auth.Admin)
+	h := NewAuthHandler(cfg, svc)
+	app := fiber.New()
+	app.Post("/auth/login-token", h.LoginToken)
+
+	body := `{"token":"wrong-token"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/login-token", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestLoginToken_MalformedJSONReturns400(t *testing.T) {
+	cfg := &config.Config{
+		Garage: config.GarageConfig{
+			AdminToken:    "test-admin-token",
+			Endpoint:      "http://g:3900",
+			AdminEndpoint: "http://g:3903",
+		},
+		Auth: config.AuthConfig{
+			Token: config.TokenAuthConfig{Enabled: true},
+		},
+	}
+	svc := newAuthTestService(t, cfg.Auth.Admin)
+	h := NewAuthHandler(cfg, svc)
+	app := fiber.New()
+	app.Post("/auth/login-token", h.LoginToken)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login-token", strings.NewReader("{not-json"))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestGetAuthConfig_TokenEnabled(t *testing.T) {
+	cfg := &config.Config{
+		Auth: config.AuthConfig{
+			Token: config.TokenAuthConfig{Enabled: true},
+		},
+	}
+	app, _ := newAuthTestApp(t, cfg)
+	req := httptest.NewRequest(http.MethodGet, "/auth/config", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Token struct {
+			Enabled bool `json:"enabled"`
+		} `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Token.Enabled {
+		t.Error("token.enabled = false, want true")
+	}
+}
+
 func TestGetMe_OIDCUserInfoLocal(t *testing.T) {
 	cfg := &config.Config{Auth: config.AuthConfig{}}
 	app, h := newAuthTestApp(t, cfg)

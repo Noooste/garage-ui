@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/subtle"
+
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
@@ -37,6 +39,9 @@ func (h *AuthHandler) GetAuthConfig(c fiber.Ctx) error {
 		},
 		"oidc": fiber.Map{
 			"enabled": h.cfg.Auth.OIDC.Enabled,
+		},
+		"token": fiber.Map{
+			"enabled": h.cfg.Auth.Token.Enabled,
 		},
 	}
 
@@ -92,6 +97,47 @@ func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 	}
 
 	// Generate JWT session token
+	sessionToken, err := h.authService.GenerateSessionToken(userInfo)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to create session"),
+		)
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"token":   sessionToken,
+		"user": fiber.Map{
+			"username": userInfo.Username,
+		},
+	})
+}
+
+// LoginTokenRequest represents the token auth login request
+type LoginTokenRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
+// LoginToken handles admin token authentication login
+func (h *AuthHandler) LoginToken(c fiber.Ctx) error {
+	var req LoginTokenRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body"),
+		)
+	}
+
+	// Constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(h.cfg.Garage.AdminToken), []byte(req.Token)) != 1 {
+		return c.Status(fiber.StatusUnauthorized).JSON(
+			models.ErrorResponse(models.ErrCodeUnauthorized, "Invalid admin token"),
+		)
+	}
+
+	userInfo := &auth.UserInfo{
+		Username: "admin-token",
+	}
+
 	sessionToken, err := h.authService.GenerateSessionToken(userInfo)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(

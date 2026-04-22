@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
@@ -17,14 +19,14 @@ import (
 func AuthMiddleware(cfg *config.AuthConfig, authService *auth.Service) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// If no auth is enabled, allow all requests.
-		if !cfg.Admin.Enabled && !cfg.OIDC.Enabled {
+		if !cfg.Admin.Enabled && !cfg.OIDC.Enabled && !cfg.Token.Enabled {
 			return c.Next()
 		}
 
 		authHeader := c.Get("Authorization")
 
-		// Try admin auth if enabled and header is present.
-		if cfg.Admin.Enabled && authHeader != "" {
+		// Try bearer token auth (works for admin, token, or any JWT session)
+		if (cfg.Admin.Enabled || cfg.Token.Enabled) && authHeader != "" {
 			if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
 				token := authHeader[7:]
 				userInfo, err := authService.ValidateSessionToken(token)
@@ -80,14 +82,18 @@ func enrichRequestLogger(c fiber.Ctx, userID, authMethod string) {
 }
 
 func authMethodsEnabled(cfg *config.AuthConfig) string {
-	switch {
-	case cfg.Admin.Enabled && cfg.OIDC.Enabled:
-		return "admin+oidc"
-	case cfg.Admin.Enabled:
-		return "admin"
-	case cfg.OIDC.Enabled:
-		return "oidc"
-	default:
+	methods := []string{}
+	if cfg.Admin.Enabled {
+		methods = append(methods, "admin")
+	}
+	if cfg.OIDC.Enabled {
+		methods = append(methods, "oidc")
+	}
+	if cfg.Token.Enabled {
+		methods = append(methods, "token")
+	}
+	if len(methods) == 0 {
 		return "none"
 	}
+	return strings.Join(methods, "+")
 }
