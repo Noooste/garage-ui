@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // GarageKeyInfo represents detailed information about a Garage access key
 type GarageKeyInfo struct {
@@ -178,6 +181,24 @@ type ClusterHealth struct {
 	Partitions       int    `json:"partitions"`
 	PartitionsQuorum int    `json:"partitionsQuorum"`
 	PartitionsAllOk  int    `json:"partitionsAllOk"`
+}
+
+// UnmarshalJSON handles both "storageNodesOk" (Garage v2.0.0) and
+// "storageNodesUp" (Garage v2.1.0+, v1.x) field names.
+func (h *ClusterHealth) UnmarshalJSON(data []byte) error {
+	type plain ClusterHealth
+	var aux struct {
+		plain
+		StorageNodesOk int `json:"storageNodesOk"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*h = ClusterHealth(aux.plain)
+	if h.StorageNodesUp == 0 && aux.StorageNodesOk != 0 {
+		h.StorageNodesUp = aux.StorageNodesOk
+	}
+	return nil
 }
 
 // ClusterStatus represents the current status of the cluster

@@ -16,9 +16,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// newAdminWithServer creates a GarageAdminService pointed at a test server
+// newAdminWithServer creates a GarageV2AdminService pointed at a test server
 // and returns it with a cleanup hook.
-func newAdminWithServer(t *testing.T, handler http.HandlerFunc) *GarageAdminService {
+func newAdminWithServer(t *testing.T, handler http.HandlerFunc) *GarageV2AdminService {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
@@ -26,7 +26,7 @@ func newAdminWithServer(t *testing.T, handler http.HandlerFunc) *GarageAdminServ
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
 	}
-	return NewGarageAdminService(cfg, "info")
+	return NewGarageV2AdminService(cfg, "info")
 }
 
 // ctxWithBufferLogger attaches a zerolog.Logger writing to buf onto ctx.

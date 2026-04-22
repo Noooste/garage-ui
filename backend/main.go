@@ -88,8 +88,13 @@ func main() {
 		Msg("Starting Garage UI Backend")
 
 	// Initialize services
-	logger.Info().Msg("Initializing Garage Admin service")
-	adminService := services.NewGarageAdminService(&cfg.Garage, cfg.Logging.Level)
+	logger.Info().Msg("Detecting Garage API version")
+	adminResult, err := services.NewAdminService(&cfg.Garage, cfg.Logging.Level)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to connect to Garage admin API")
+	}
+	adminService := adminResult.Service
+	capabilitiesHandler := handlers.NewCapabilitiesHandler(adminResult.APIVersion, adminResult.Capabilities)
 
 	logger.Info().Msg("Initializing S3 service")
 	s3Service := services.NewS3Service(&cfg.Garage, adminService)
@@ -182,6 +187,7 @@ func main() {
 		userHandler,
 		clusterHandler,
 		monitoringHandler,
+		capabilitiesHandler,
 	)
 
 	// Start server in a goroutine

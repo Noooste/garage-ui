@@ -56,14 +56,14 @@ func TestNewS3Service_LeavesBareHostUnchanged(t *testing.T) {
 	}
 }
 
-// adminBackedS3 wires an S3Service to a fresh GarageAdminService that talks
+// adminBackedS3 wires an S3Service to a fresh GarageV2AdminService that talks
 // to the supplied http.Handler.
 func adminBackedS3(t *testing.T, handler http.Handler) (*S3Service, *httptest.Server) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	admin := NewGarageAdminService(&config.GarageConfig{
+	admin := NewGarageV2AdminService(&config.GarageConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token",
 	}, "")

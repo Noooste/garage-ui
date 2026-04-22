@@ -30,12 +30,28 @@ A web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) object st
 - Multiple authentication options (none/basic/OIDC)
 - Drag-and-drop file uploads
 
+## Compatibility
+
+Garage UI auto-detects your Garage version at startup. Most features work across all supported versions.
+
+| Feature | Garage v1.x | Garage v2.x |
+|---|---|---|
+| Bucket management | Yes | Yes |
+| Object browser | Yes | Yes |
+| Key management | Yes | Yes |
+| Access control | Yes | Yes |
+| Cluster health | Yes | Yes |
+| Cluster statistics | — | Yes |
+| Per-node details | Limited | Yes |
+
+Features unavailable on your version appear as disabled in the interface.
+
 ## Quick Start
 
 ### Prerequisites
 
 - Docker & Docker Compose
-- Garage S3 cluster (v2.1.0+) or use the included setup
+- Garage S3 cluster (v1.1.0+) or use the included setup
 
 ### 1. Clone & Setup
 

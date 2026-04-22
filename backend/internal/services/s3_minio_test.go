@@ -62,7 +62,7 @@ func newS3TestService(t *testing.T, s3Handler http.Handler) *S3Service {
 	srv := httptest.NewServer(combined)
 	t.Cleanup(srv.Close)
 
-	admin := NewGarageAdminService(&config.GarageConfig{
+	admin := NewGarageV2AdminService(&config.GarageConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test",
 	}, "")

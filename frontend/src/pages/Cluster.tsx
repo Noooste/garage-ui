@@ -8,9 +8,32 @@ import {Badge} from '@/components/ui/badge';
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
 import type {ClusterNode, LocalNodeInfo, NodeStatistics} from '@/types';
 import {useState} from 'react';
+import { useCapabilities } from '@/hooks/useCapabilities';
+
+function UnsupportedFeatureCard({ title, description }: { title: string; description?: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-[var(--muted-foreground)]">
+          <Info className="h-4 w-4" />
+          {title}
+        </CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          Requires Garage v2.0+
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function Cluster() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  const { data: capabilities } = useCapabilities();
+  const features = capabilities?.features;
 
   const { data: health, isLoading: healthLoading } = useQuery({
     queryKey: ['cluster-health'],
@@ -28,18 +51,19 @@ export function Cluster() {
     queryKey: ['cluster-statistics'],
     queryFn: () => garageApi.getClusterStatistics(),
     refetchInterval: 30000,
+    enabled: features?.clusterStatistics !== false,
   });
 
   const { data: nodeInfo, isLoading: nodeInfoLoading } = useQuery({
     queryKey: ['node-info', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeInfo(selectedNodeId || '*'),
-    enabled: !!selectedNodeId || selectedNodeId === null,
+    enabled: features?.nodeInfo !== false && (!!selectedNodeId || selectedNodeId === null),
   });
 
   const { data: nodeStats } = useQuery({
     queryKey: ['node-statistics', selectedNodeId || '*'],
     queryFn: () => garageApi.getNodeStatistics(selectedNodeId || '*'),
-    enabled: !!selectedNodeId,
+    enabled: features?.nodeStatistics !== false && !!selectedNodeId,
   });
 
   const isLoading = healthLoading || statusLoading || statisticsLoading;
@@ -311,119 +335,129 @@ export function Cluster() {
 
           {/* Statistics Tab */}
           <TabsContent value="statistics" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Cluster Statistics</CardTitle>
-                <CardDescription>
-                  Detailed statistics and metrics from the Garage cluster
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {statistics ? (
-                  <div className="space-y-4">
-                    <div className="rounded-lg bg-muted p-4">
-                      <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
-                        {statistics.freeform}
-                      </pre>
+            {features?.clusterStatistics === false ? (
+              <UnsupportedFeatureCard title="Cluster Statistics" description="Global cluster metrics and statistics" />
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Cluster Statistics</CardTitle>
+                  <CardDescription>
+                    Detailed statistics and metrics from the Garage cluster
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {statistics ? (
+                    <div className="space-y-4">
+                      <div className="rounded-lg bg-muted p-4">
+                        <pre className="text-xs overflow-x-auto whitespace-pre-wrap font-mono">
+                          {statistics.freeform}
+                        </pre>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No statistics available</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  ) : (
+                    <div className="text-center text-muted-foreground py-8">
+                      <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>No statistics available</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Details Tab */}
           <TabsContent value="details" className="space-y-4">
             {selectedNodeId ? (
               <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Node Information</CardTitle>
-                    <CardDescription>
-                      Detailed information for node: {selectedNodeId.substring(0, 16)}...
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {nodeInfoLoading ? (
-                      <div className="text-center py-8">
-                        <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
-                        <p className="mt-2 text-sm text-muted-foreground">Loading node info...</p>
-                      </div>
-                    ) : nodeInfo ? (
-                      <div className="space-y-4">
-                        {/* Success responses */}
-                        {Object.entries(nodeInfo.success || {}).map(([nodeId, info]) => (
-                          <div key={nodeId} className="space-y-3">
-                            <div className="flex items-center gap-2 mb-3">
-                              <Info className="h-4 w-4 text-primary" />
-                              <h4 className="font-medium">
-                                Node: {nodeId.substring(0, 16)}...
-                              </h4>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div className="rounded-lg border p-3">
-                                <div className="text-xs text-muted-foreground mb-1">Node ID</div>
-                                <div className="font-mono text-sm break-all">{(info as LocalNodeInfo).nodeId}</div>
+                {features?.nodeInfo === false ? (
+                  <UnsupportedFeatureCard title="Node Details" description="Per-node information and configuration" />
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Node Information</CardTitle>
+                      <CardDescription>
+                        Detailed information for node: {selectedNodeId.substring(0, 16)}...
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {nodeInfoLoading ? (
+                        <div className="text-center py-8">
+                          <div className="inline-block h-6 w-6 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+                          <p className="mt-2 text-sm text-muted-foreground">Loading node info...</p>
+                        </div>
+                      ) : nodeInfo ? (
+                        <div className="space-y-4">
+                          {/* Success responses */}
+                          {Object.entries(nodeInfo.success || {}).map(([nodeId, info]) => (
+                            <div key={nodeId} className="space-y-3">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Info className="h-4 w-4 text-primary" />
+                                <h4 className="font-medium">
+                                  Node: {nodeId.substring(0, 16)}...
+                                </h4>
                               </div>
 
-                              <div className="rounded-lg border p-3">
-                                <div className="text-xs text-muted-foreground mb-1">Garage Version</div>
-                                <div className="text-sm">{(info as LocalNodeInfo).garageVersion}</div>
-                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="rounded-lg border p-3">
+                                  <div className="text-xs text-muted-foreground mb-1">Node ID</div>
+                                  <div className="font-mono text-sm break-all">{(info as LocalNodeInfo).nodeId}</div>
+                                </div>
 
-                              <div className="rounded-lg border p-3">
-                                <div className="text-xs text-muted-foreground mb-1">Rust Version</div>
-                                <div className="text-sm">{(info as LocalNodeInfo).rustVersion}</div>
-                              </div>
+                                <div className="rounded-lg border p-3">
+                                  <div className="text-xs text-muted-foreground mb-1">Garage Version</div>
+                                  <div className="text-sm">{(info as LocalNodeInfo).garageVersion}</div>
+                                </div>
 
-                              <div className="rounded-lg border p-3">
-                                <div className="text-xs text-muted-foreground mb-1">Database Engine</div>
-                                <div className="text-sm">{(info as LocalNodeInfo).dbEngine}</div>
-                              </div>
-                            </div>
+                                <div className="rounded-lg border p-3">
+                                  <div className="text-xs text-muted-foreground mb-1">Rust Version</div>
+                                  <div className="text-sm">{(info as LocalNodeInfo).rustVersion}</div>
+                                </div>
 
-                            {(info as LocalNodeInfo).garageFeatures && (info as LocalNodeInfo).garageFeatures!.length > 0 && (
-                              <div className="rounded-lg border p-3">
-                                <div className="text-xs text-muted-foreground mb-2">Garage Features</div>
-                                <div className="flex flex-wrap gap-2">
-                                  {(info as LocalNodeInfo).garageFeatures!.map((feature) => (
-                                    <Badge key={feature} variant="neutral">
-                                      {feature}
-                                    </Badge>
-                                  ))}
+                                <div className="rounded-lg border p-3">
+                                  <div className="text-xs text-muted-foreground mb-1">Database Engine</div>
+                                  <div className="text-sm">{(info as LocalNodeInfo).dbEngine}</div>
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        ))}
 
-                        {/* Error responses */}
-                        {Object.entries(nodeInfo.error || {}).map(([nodeId, error]) => (
-                          <div key={nodeId} className="rounded-lg border border-red-200 bg-red-50 p-3">
-                            <div className="flex items-center gap-2 text-red-600 mb-1">
-                              <XCircle className="h-4 w-4" />
-                              <div className="font-medium">Error for node {nodeId.substring(0, 16)}...</div>
+                              {(info as LocalNodeInfo).garageFeatures && (info as LocalNodeInfo).garageFeatures!.length > 0 && (
+                                <div className="rounded-lg border p-3">
+                                  <div className="text-xs text-muted-foreground mb-2">Garage Features</div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {(info as LocalNodeInfo).garageFeatures!.map((feature) => (
+                                      <Badge key={feature} variant="neutral">
+                                        {feature}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <div className="text-sm text-red-800">{error}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center text-muted-foreground py-8">
-                        <Info className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <p>No node information available</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                          ))}
 
-                {nodeStats && (
+                          {/* Error responses */}
+                          {Object.entries(nodeInfo.error || {}).map(([nodeId, error]) => (
+                            <div key={nodeId} className="rounded-lg border border-red-200 bg-red-50 p-3">
+                              <div className="flex items-center gap-2 text-red-600 mb-1">
+                                <XCircle className="h-4 w-4" />
+                                <div className="font-medium">Error for node {nodeId.substring(0, 16)}...</div>
+                              </div>
+                              <div className="text-sm text-red-800">{error}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-muted-foreground py-8">
+                          <Info className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                          <p>No node information available</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {features?.nodeStatistics === false ? (
+                  <UnsupportedFeatureCard title="Node Statistics" description="Per-node performance metrics" />
+                ) : nodeStats ? (
                   <Card>
                     <CardHeader>
                       <CardTitle>Node Statistics</CardTitle>
@@ -464,7 +498,7 @@ export function Cluster() {
                       </div>
                     </CardContent>
                   </Card>
-                )}
+                ) : null}
               </>
             ) : (
               <Card>

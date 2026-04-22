@@ -21,11 +21,11 @@ import (
 type S3Service struct {
 	client       *minio.Client
 	config       *config.GarageConfig
-	adminService *GarageAdminService
+	adminService AdminService
 }
 
 // NewS3Service creates a new S3 service instance using MinIO SDK
-func NewS3Service(cfg *config.GarageConfig, adminService *GarageAdminService) *S3Service {
+func NewS3Service(cfg *config.GarageConfig, adminService AdminService) *S3Service {
 	// Create MinIO client for Garage
 	// trim http or https from endpoint
 	if strings.HasPrefix(cfg.Endpoint, "http://") {

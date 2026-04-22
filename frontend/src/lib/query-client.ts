@@ -40,4 +40,8 @@ export const queryKeys = {
     all: ['dashboard'] as const,
     metrics: () => [...queryKeys.dashboard.all, 'metrics'] as const,
   },
+  capabilities: {
+    all: ['capabilities'] as const,
+    get: () => [...queryKeys.capabilities.all, 'get'] as const,
+  },
 };

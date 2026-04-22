@@ -15,22 +15,22 @@ import (
 	"github.com/Noooste/azuretls-client"
 )
 
-// GarageAdminService handles interactions with the Garage Admin API
-type GarageAdminService struct {
+// GarageV2AdminService handles interactions with the Garage Admin API
+type GarageV2AdminService struct {
 	baseURL    string
 	token      string
 	httpClient *azuretls.Session
 }
 
-// NewGarageAdminService creates a new Garage Admin API service
-func NewGarageAdminService(cfg *config.GarageConfig, logLevel string) *GarageAdminService {
+// NewGarageV2AdminService creates a new Garage Admin API service
+func NewGarageV2AdminService(cfg *config.GarageConfig, logLevel string) *GarageV2AdminService {
 	session := azuretls.NewSession()
 
 	if logLevel == "debug" {
 		session.Log()
 	}
 
-	return &GarageAdminService{
+	return &GarageV2AdminService{
 		baseURL:    cfg.AdminEndpoint,
 		token:      cfg.AdminToken,
 		httpClient: session,
@@ -38,7 +38,7 @@ func NewGarageAdminService(cfg *config.GarageConfig, logLevel string) *GarageAdm
 }
 
 // doRequest performs an HTTP request to the Admin API with retry logic for connection refused errors
-func (s *GarageAdminService) doRequest(ctx context.Context, method, path string, body interface{}) (*azuretls.Response, error) {
+func (s *GarageV2AdminService) doRequest(ctx context.Context, method, path string, body interface{}) (*azuretls.Response, error) {
 	var resp *azuretls.Response
 
 	retryConfig := utils.DefaultRetryConfig()
@@ -82,7 +82,7 @@ func decodeResponse(resp *azuretls.Response, target interface{}) error {
 }
 
 // ListKeys returns all access keys in the cluster
-func (s *GarageAdminService) ListKeys(ctx context.Context) ([]models.ListKeysResponseItem, error) {
+func (s *GarageV2AdminService) ListKeys(ctx context.Context) ([]models.ListKeysResponseItem, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/v2/ListKeys", nil)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -97,7 +97,7 @@ func (s *GarageAdminService) ListKeys(ctx context.Context) ([]models.ListKeysRes
 }
 
 // CreateKey creates a new API access key
-func (s *GarageAdminService) CreateKey(ctx context.Context, req models.CreateKeyRequest) (*models.GarageKeyInfo, error) {
+func (s *GarageV2AdminService) CreateKey(ctx context.Context, req models.CreateKeyRequest) (*models.GarageKeyInfo, error) {
 	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/CreateKey", req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -112,7 +112,7 @@ func (s *GarageAdminService) CreateKey(ctx context.Context, req models.CreateKey
 }
 
 // GetKeyInfo returns information about a specific access key
-func (s *GarageAdminService) GetKeyInfo(ctx context.Context, keyID string, showSecret bool) (*models.GarageKeyInfo, error) {
+func (s *GarageV2AdminService) GetKeyInfo(ctx context.Context, keyID string, showSecret bool) (*models.GarageKeyInfo, error) {
 	path := fmt.Sprintf("/v2/GetKeyInfo?id=%s", keyID)
 	if showSecret {
 		path += "&showSecretKey=true"
@@ -132,7 +132,7 @@ func (s *GarageAdminService) GetKeyInfo(ctx context.Context, keyID string, showS
 }
 
 // UpdateKey updates information about an access key
-func (s *GarageAdminService) UpdateKey(ctx context.Context, keyID string, req models.UpdateKeyRequest) (*models.GarageKeyInfo, error) {
+func (s *GarageV2AdminService) UpdateKey(ctx context.Context, keyID string, req models.UpdateKeyRequest) (*models.GarageKeyInfo, error) {
 	path := fmt.Sprintf("/v2/UpdateKey?id=%s", keyID)
 
 	resp, err := s.doRequest(ctx, http.MethodPost, path, req)
@@ -149,7 +149,7 @@ func (s *GarageAdminService) UpdateKey(ctx context.Context, keyID string, req mo
 }
 
 // DeleteKey deletes an access key from the cluster
-func (s *GarageAdminService) DeleteKey(ctx context.Context, keyID string) error {
+func (s *GarageV2AdminService) DeleteKey(ctx context.Context, keyID string) error {
 	path := fmt.Sprintf("/v2/DeleteKey?id=%s", keyID)
 
 	resp, err := s.doRequest(ctx, http.MethodPost, path, nil)
@@ -165,7 +165,7 @@ func (s *GarageAdminService) DeleteKey(ctx context.Context, keyID string) error 
 }
 
 // ImportKey imports an existing API access key
-func (s *GarageAdminService) ImportKey(ctx context.Context, req models.ImportKeyRequest) (*models.GarageKeyInfo, error) {
+func (s *GarageV2AdminService) ImportKey(ctx context.Context, req models.ImportKeyRequest) (*models.GarageKeyInfo, error) {
 	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/ImportKey", req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -180,7 +180,7 @@ func (s *GarageAdminService) ImportKey(ctx context.Context, req models.ImportKey
 }
 
 // ListBuckets returns all buckets in the cluster.
-func (s *GarageAdminService) ListBuckets(ctx context.Context) ([]models.ListBucketsResponseItem, error) {
+func (s *GarageV2AdminService) ListBuckets(ctx context.Context) ([]models.ListBucketsResponseItem, error) {
 	log := logpkg.FromCtx(ctx).With().
 		Str("component", "admin").
 		Str("operation", "list_buckets").
@@ -216,7 +216,7 @@ func (s *GarageAdminService) ListBuckets(ctx context.Context) ([]models.ListBuck
 }
 
 // GetBucketInfo returns detailed information about a bucket by ID.
-func (s *GarageAdminService) GetBucketInfo(ctx context.Context, bucketID string) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) GetBucketInfo(ctx context.Context, bucketID string) (*models.GarageBucketInfo, error) {
 	log := logpkg.FromCtx(ctx).With().
 		Str("component", "admin").
 		Str("operation", "get_bucket_info").
@@ -243,7 +243,7 @@ func (s *GarageAdminService) GetBucketInfo(ctx context.Context, bucketID string)
 }
 
 // GetBucketInfoByAlias returns detailed information about a bucket by its global alias.
-func (s *GarageAdminService) GetBucketInfoByAlias(ctx context.Context, globalAlias string) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) GetBucketInfoByAlias(ctx context.Context, globalAlias string) (*models.GarageBucketInfo, error) {
 	log := logpkg.FromCtx(ctx).With().
 		Str("component", "admin").
 		Str("operation", "get_bucket_info_by_alias").
@@ -270,7 +270,7 @@ func (s *GarageAdminService) GetBucketInfoByAlias(ctx context.Context, globalAli
 }
 
 // CreateBucket creates a new bucket via the Admin API.
-func (s *GarageAdminService) CreateBucket(ctx context.Context, req models.CreateBucketAdminRequest) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) CreateBucket(ctx context.Context, req models.CreateBucketAdminRequest) (*models.GarageBucketInfo, error) {
 	var alias string
 	if req.GlobalAlias != nil {
 		alias = *req.GlobalAlias
@@ -301,7 +301,7 @@ func (s *GarageAdminService) CreateBucket(ctx context.Context, req models.Create
 }
 
 // UpdateBucket updates bucket settings.
-func (s *GarageAdminService) UpdateBucket(ctx context.Context, bucketID string, req models.UpdateBucketRequest) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) UpdateBucket(ctx context.Context, bucketID string, req models.UpdateBucketRequest) (*models.GarageBucketInfo, error) {
 	log := logpkg.FromCtx(ctx).With().
 		Str("component", "admin").
 		Str("operation", "update_bucket").
@@ -328,7 +328,7 @@ func (s *GarageAdminService) UpdateBucket(ctx context.Context, bucketID string, 
 }
 
 // DeleteBucket deletes a bucket.
-func (s *GarageAdminService) DeleteBucket(ctx context.Context, bucketID string) error {
+func (s *GarageV2AdminService) DeleteBucket(ctx context.Context, bucketID string) error {
 	log := logpkg.FromCtx(ctx).With().
 		Str("component", "admin").
 		Str("operation", "delete_bucket").
@@ -354,7 +354,7 @@ func (s *GarageAdminService) DeleteBucket(ctx context.Context, bucketID string) 
 }
 
 // AddBucketAlias adds an alias to a bucket
-func (s *GarageAdminService) AddBucketAlias(ctx context.Context, req models.AddBucketAliasRequest) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) AddBucketAlias(ctx context.Context, req models.AddBucketAliasRequest) (*models.GarageBucketInfo, error) {
 	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/AddBucketAlias", req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -369,7 +369,7 @@ func (s *GarageAdminService) AddBucketAlias(ctx context.Context, req models.AddB
 }
 
 // RemoveBucketAlias removes an alias from a bucket
-func (s *GarageAdminService) RemoveBucketAlias(ctx context.Context, req models.RemoveBucketAliasRequest) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) RemoveBucketAlias(ctx context.Context, req models.RemoveBucketAliasRequest) (*models.GarageBucketInfo, error) {
 	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/RemoveBucketAlias", req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -384,7 +384,7 @@ func (s *GarageAdminService) RemoveBucketAlias(ctx context.Context, req models.R
 }
 
 // AllowBucketKey grants permissions for a key on a bucket.
-func (s *GarageAdminService) AllowBucketKey(ctx context.Context, req models.BucketKeyPermRequest) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) AllowBucketKey(ctx context.Context, req models.BucketKeyPermRequest) (*models.GarageBucketInfo, error) {
 	log := logpkg.FromCtx(ctx).With().
 		Str("component", "admin").
 		Str("operation", "allow_bucket_key").
@@ -415,7 +415,7 @@ func (s *GarageAdminService) AllowBucketKey(ctx context.Context, req models.Buck
 }
 
 // DenyBucketKey revokes permissions for a key on a bucket
-func (s *GarageAdminService) DenyBucketKey(ctx context.Context, req models.BucketKeyPermRequest) (*models.GarageBucketInfo, error) {
+func (s *GarageV2AdminService) DenyBucketKey(ctx context.Context, req models.BucketKeyPermRequest) (*models.GarageBucketInfo, error) {
 	resp, err := s.doRequest(ctx, http.MethodPost, "/v2/DenyBucketKey", req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -430,7 +430,7 @@ func (s *GarageAdminService) DenyBucketKey(ctx context.Context, req models.Bucke
 }
 
 // GetClusterHealth returns the health status of the cluster
-func (s *GarageAdminService) GetClusterHealth(ctx context.Context) (*models.ClusterHealth, error) {
+func (s *GarageV2AdminService) GetClusterHealth(ctx context.Context) (*models.ClusterHealth, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/v2/GetClusterHealth", nil)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -445,7 +445,7 @@ func (s *GarageAdminService) GetClusterHealth(ctx context.Context) (*models.Clus
 }
 
 // GetClusterStatus returns the current status of the cluster
-func (s *GarageAdminService) GetClusterStatus(ctx context.Context) (*models.ClusterStatus, error) {
+func (s *GarageV2AdminService) GetClusterStatus(ctx context.Context) (*models.ClusterStatus, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/v2/GetClusterStatus", nil)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -460,7 +460,7 @@ func (s *GarageAdminService) GetClusterStatus(ctx context.Context) (*models.Clus
 }
 
 // GetClusterStatistics returns global cluster statistics
-func (s *GarageAdminService) GetClusterStatistics(ctx context.Context) (*models.ClusterStatistics, error) {
+func (s *GarageV2AdminService) GetClusterStatistics(ctx context.Context) (*models.ClusterStatistics, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/v2/GetClusterStatistics", nil)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -475,7 +475,7 @@ func (s *GarageAdminService) GetClusterStatistics(ctx context.Context) (*models.
 }
 
 // GetNodeInfo returns information about a specific node
-func (s *GarageAdminService) GetNodeInfo(ctx context.Context, nodeID string) (*models.MultiNodeResponse, error) {
+func (s *GarageV2AdminService) GetNodeInfo(ctx context.Context, nodeID string) (*models.MultiNodeResponse, error) {
 	path := fmt.Sprintf("/v2/GetNodeInfo?node=%s", nodeID)
 
 	resp, err := s.doRequest(ctx, http.MethodGet, path, nil)
@@ -492,7 +492,7 @@ func (s *GarageAdminService) GetNodeInfo(ctx context.Context, nodeID string) (*m
 }
 
 // GetNodeStatistics returns statistics for a specific node
-func (s *GarageAdminService) GetNodeStatistics(ctx context.Context, nodeID string) (*models.MultiNodeResponse, error) {
+func (s *GarageV2AdminService) GetNodeStatistics(ctx context.Context, nodeID string) (*models.MultiNodeResponse, error) {
 	path := fmt.Sprintf("/v2/GetNodeStatistics?node=%s", nodeID)
 
 	resp, err := s.doRequest(ctx, http.MethodGet, path, nil)
@@ -509,7 +509,7 @@ func (s *GarageAdminService) GetNodeStatistics(ctx context.Context, nodeID strin
 }
 
 // HealthCheck checks if the Admin API is reachable
-func (s *GarageAdminService) HealthCheck(ctx context.Context) error {
+func (s *GarageV2AdminService) HealthCheck(ctx context.Context) error {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/health", nil)
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
@@ -528,7 +528,7 @@ func msSince(t time.Time) float64 {
 }
 
 // GetMetrics returns Prometheus metrics from the Admin API
-func (s *GarageAdminService) GetMetrics(ctx context.Context) (string, error) {
+func (s *GarageV2AdminService) GetMetrics(ctx context.Context) (string, error) {
 	resp, err := s.doRequest(ctx, http.MethodGet, "/metrics", nil)
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)

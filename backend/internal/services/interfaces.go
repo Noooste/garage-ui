@@ -9,7 +9,7 @@ import (
 )
 
 // AdminService is the set of Garage Admin API operations used by HTTP handlers.
-// It is implemented by *GarageAdminService in admin.go. Kept narrow so that
+// It is implemented by *GarageV2AdminService in admin_v2.go. Kept narrow so that
 // hand-rolled mocks in tests don't need to cover admin methods the handlers
 // never call.
 type AdminService interface {
@@ -65,6 +65,7 @@ type S3Storage interface {
 
 // Compile-time guarantees that the concrete services implement the interfaces.
 var (
-	_ AdminService = (*GarageAdminService)(nil)
+	_ AdminService = (*GarageV2AdminService)(nil)
+	_ AdminService = (*GarageV1AdminService)(nil)
 	_ S3Storage    = (*S3Service)(nil)
 )

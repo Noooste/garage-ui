@@ -8,6 +8,7 @@ import type {
   ClusterHealth,
   ClusterStatistics,
   ClusterStatus,
+  GarageCapabilities,
   GarageMetrics,
   MultiNodeResponse,
   MultiNodeStatisticsResponse,
@@ -84,6 +85,11 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
 
+      return Promise.reject(error);
+    }
+
+    // 501 Not Implemented = expected for unsupported Garage version features
+    if (error.response?.status === 501) {
       return Promise.reject(error);
     }
 
@@ -164,6 +170,14 @@ export const healthApi = {
   getVersion: async (): Promise<string> => {
     const response = await api.get('/v1/health');
     return response.data.data.version as string;
+  },
+};
+
+// Capabilities API
+export const capabilitiesApi = {
+  get: async (): Promise<GarageCapabilities> => {
+    const response = await api.get('/v1/capabilities');
+    return response.data.data;
   },
 };
 

@@ -196,4 +196,5 @@ const (
 	ErrCodeUploadFailed      = "UPLOAD_FAILED"
 	ErrCodeDeleteFailed      = "DELETE_FAILED"
 	ErrCodeListFailed        = "LIST_FAILED"
+	ErrCodeUnsupported       = "UNSUPPORTED"
 )
