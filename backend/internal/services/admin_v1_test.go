@@ -433,6 +433,186 @@ func TestV1_HealthCheck(t *testing.T) {
 	}
 }
 
+func TestV1_ErrorPaths(t *testing.T) {
+	// Server that returns 500 for all requests to exercise error branches.
+	srv500 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(500)
+		w.Write([]byte(`{"error":"internal"}`))
+	}))
+	t.Cleanup(srv500.Close)
+	svc := NewGarageV1AdminService(&config.GarageConfig{
+		AdminEndpoint: srv500.URL,
+		AdminToken:    "tok",
+	}, "")
+
+	ctx := context.Background()
+
+	if _, err := svc.ListKeys(ctx); err == nil {
+		t.Error("ListKeys: expected error")
+	}
+	if _, err := svc.CreateKey(ctx, models.CreateKeyRequest{}); err == nil {
+		t.Error("CreateKey: expected error")
+	}
+	if _, err := svc.GetKeyInfo(ctx, "k", false); err == nil {
+		t.Error("GetKeyInfo: expected error")
+	}
+	if _, err := svc.UpdateKey(ctx, "k", models.UpdateKeyRequest{}); err == nil {
+		t.Error("UpdateKey: expected error")
+	}
+	if err := svc.DeleteKey(ctx, "k"); err == nil {
+		t.Error("DeleteKey: expected error")
+	}
+	if _, err := svc.ImportKey(ctx, models.ImportKeyRequest{}); err == nil {
+		t.Error("ImportKey: expected error")
+	}
+	if _, err := svc.ListBuckets(ctx); err == nil {
+		t.Error("ListBuckets: expected error")
+	}
+	if _, err := svc.GetBucketInfo(ctx, "b"); err == nil {
+		t.Error("GetBucketInfo: expected error")
+	}
+	if _, err := svc.GetBucketInfoByAlias(ctx, "a"); err == nil {
+		t.Error("GetBucketInfoByAlias: expected error")
+	}
+	if _, err := svc.CreateBucket(ctx, models.CreateBucketAdminRequest{}); err == nil {
+		t.Error("CreateBucket: expected error")
+	}
+	if _, err := svc.UpdateBucket(ctx, "b", models.UpdateBucketRequest{}); err == nil {
+		t.Error("UpdateBucket: expected error")
+	}
+	if err := svc.DeleteBucket(ctx, "b"); err == nil {
+		t.Error("DeleteBucket: expected error")
+	}
+	if _, err := svc.AllowBucketKey(ctx, models.BucketKeyPermRequest{}); err == nil {
+		t.Error("AllowBucketKey: expected error")
+	}
+	if _, err := svc.DenyBucketKey(ctx, models.BucketKeyPermRequest{}); err == nil {
+		t.Error("DenyBucketKey: expected error")
+	}
+	alias := "a"
+	if _, err := svc.AddBucketAlias(ctx, models.AddBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
+		t.Error("AddBucketAlias: expected error")
+	}
+	if _, err := svc.RemoveBucketAlias(ctx, models.RemoveBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
+		t.Error("RemoveBucketAlias: expected error")
+	}
+	if _, err := svc.GetClusterHealth(ctx); err == nil {
+		t.Error("GetClusterHealth: expected error")
+	}
+	if _, err := svc.GetClusterStatus(ctx); err == nil {
+		t.Error("GetClusterStatus: expected error")
+	}
+	if err := svc.HealthCheck(ctx); err == nil {
+		t.Error("HealthCheck: expected error")
+	}
+	if _, err := svc.GetMetrics(ctx); err == nil {
+		t.Error("GetMetrics: expected error")
+	}
+}
+
+func TestV1_RequestFailurePaths(t *testing.T) {
+	// Use a cancelled context to make doRequest fail immediately (no retry wait).
+	svc, _ := newV1RecordingServer(t, 200, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	if _, err := svc.ListKeys(ctx); err == nil {
+		t.Error("ListKeys: expected error")
+	}
+	if _, err := svc.CreateKey(ctx, models.CreateKeyRequest{}); err == nil {
+		t.Error("CreateKey: expected error")
+	}
+	if _, err := svc.GetKeyInfo(ctx, "k", false); err == nil {
+		t.Error("GetKeyInfo: expected error")
+	}
+	if _, err := svc.UpdateKey(ctx, "k", models.UpdateKeyRequest{}); err == nil {
+		t.Error("UpdateKey: expected error")
+	}
+	if err := svc.DeleteKey(ctx, "k"); err == nil {
+		t.Error("DeleteKey: expected error")
+	}
+	if _, err := svc.ImportKey(ctx, models.ImportKeyRequest{}); err == nil {
+		t.Error("ImportKey: expected error")
+	}
+	if _, err := svc.ListBuckets(ctx); err == nil {
+		t.Error("ListBuckets: expected error")
+	}
+	if _, err := svc.GetBucketInfo(ctx, "b"); err == nil {
+		t.Error("GetBucketInfo: expected error")
+	}
+	if _, err := svc.GetBucketInfoByAlias(ctx, "a"); err == nil {
+		t.Error("GetBucketInfoByAlias: expected error")
+	}
+	if _, err := svc.CreateBucket(ctx, models.CreateBucketAdminRequest{}); err == nil {
+		t.Error("CreateBucket: expected error")
+	}
+	if _, err := svc.UpdateBucket(ctx, "b", models.UpdateBucketRequest{}); err == nil {
+		t.Error("UpdateBucket: expected error")
+	}
+	if err := svc.DeleteBucket(ctx, "b"); err == nil {
+		t.Error("DeleteBucket: expected error")
+	}
+	if _, err := svc.AllowBucketKey(ctx, models.BucketKeyPermRequest{}); err == nil {
+		t.Error("AllowBucketKey: expected error")
+	}
+	if _, err := svc.DenyBucketKey(ctx, models.BucketKeyPermRequest{}); err == nil {
+		t.Error("DenyBucketKey: expected error")
+	}
+	alias := "a"
+	if _, err := svc.AddBucketAlias(ctx, models.AddBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
+		t.Error("AddBucketAlias: expected error")
+	}
+	if _, err := svc.RemoveBucketAlias(ctx, models.RemoveBucketAliasRequest{BucketID: "b", GlobalAlias: &alias}); err == nil {
+		t.Error("RemoveBucketAlias: expected error")
+	}
+	if _, err := svc.GetClusterHealth(ctx); err == nil {
+		t.Error("GetClusterHealth: expected error")
+	}
+	if _, err := svc.GetClusterStatus(ctx); err == nil {
+		t.Error("GetClusterStatus: expected error")
+	}
+	if err := svc.HealthCheck(ctx); err == nil {
+		t.Error("HealthCheck: expected error")
+	}
+	if _, err := svc.GetMetrics(ctx); err == nil {
+		t.Error("GetMetrics: expected error")
+	}
+}
+
+func TestV1_AddBucketAlias_MissingFields(t *testing.T) {
+	svc, _ := newV1RecordingServer(t, 200, nil)
+	// Neither globalAlias nor localAlias set
+	_, err := svc.AddBucketAlias(context.Background(), models.AddBucketAliasRequest{BucketID: "b"})
+	if err == nil {
+		t.Fatal("expected error for missing alias fields")
+	}
+}
+
+func TestV1_RemoveBucketAlias_MissingFields(t *testing.T) {
+	svc, _ := newV1RecordingServer(t, 200, nil)
+	_, err := svc.RemoveBucketAlias(context.Background(), models.RemoveBucketAliasRequest{BucketID: "b"})
+	if err == nil {
+		t.Fatal("expected error for missing alias fields")
+	}
+}
+
+func TestV1_RemoveBucketAlias_Local(t *testing.T) {
+	want := &models.GarageBucketInfo{ID: "b1"}
+	svc, rec := newV1RecordingServer(t, 200, want)
+	alias := "localname"
+	keyID := "GK1"
+	_, err := svc.RemoveBucketAlias(context.Background(), models.RemoveBucketAliasRequest{
+		BucketID: "b1", LocalAlias: &alias, AccessKeyID: &keyID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.method != http.MethodDelete || rec.path != "/v1/bucket/alias/local" {
+		t.Errorf("request = %s %s", rec.method, rec.path)
+	}
+}
+
 func TestV1_GetMetrics(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
