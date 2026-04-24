@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"Noooste/garage-ui/internal/models"
+	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/services/mocks"
 
 	"github.com/gofiber/fiber/v3"
@@ -121,6 +122,42 @@ func TestCluster_GetStatistics_ServiceErrorReturns500(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestCluster_GetStatistics_UnsupportedReturns501(t *testing.T) {
+	app, admin := newClusterTestApp(t)
+	admin.GetClusterStatisticsFn = func(_ context.Context) (*models.ClusterStatistics, error) {
+		return nil, services.ErrUnsupported
+	}
+	resp := doGet(t, app, "/cluster/statistics")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want 501", resp.StatusCode)
+	}
+}
+
+func TestCluster_GetNodeInfo_UnsupportedReturns501(t *testing.T) {
+	app, admin := newClusterTestApp(t)
+	admin.GetNodeInfoFn = func(_ context.Context, _ string) (*models.MultiNodeResponse, error) {
+		return nil, services.ErrUnsupported
+	}
+	resp := doGet(t, app, "/cluster/nodes/n1")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want 501", resp.StatusCode)
+	}
+}
+
+func TestCluster_GetNodeStatistics_UnsupportedReturns501(t *testing.T) {
+	app, admin := newClusterTestApp(t)
+	admin.GetNodeStatisticsFn = func(_ context.Context, _ string) (*models.MultiNodeResponse, error) {
+		return nil, services.ErrUnsupported
+	}
+	resp := doGet(t, app, "/cluster/nodes/n1/statistics")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want 501", resp.StatusCode)
 	}
 }
 
