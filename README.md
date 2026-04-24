@@ -1,13 +1,15 @@
-# Garage UI
+<p align="center">
+  <a href="https://github.com/Noooste/garage-ui/actions/workflows/build.yml"><img src="https://github.com/Noooste/garage-ui/actions/workflows/build.yml/badge.svg" alt="Docker Build" /></a>
+  <a href="https://github.com/Noooste/garage-ui/actions/workflows/release.yml"><img src="https://github.com/Noooste/garage-ui/actions/workflows/release.yml/badge.svg" alt="Helm Chart" /></a>
+  <a href="https://codecov.io/gh/Noooste/garage-ui"><img src="https://codecov.io/gh/Noooste/garage-ui/branch/main/graph/badge.svg" alt="Coverage" /></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go" alt="Go Version" /></a>
+  <a href="https://artifacthub.io/packages/search?repo=garage-ui"><img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/garage-ui" alt="Artifact Hub" /></a>
+</p>
 
-A web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) object storage clusters.
+# Garage UI - Web Dashboard for Garage S3 Storage
 
-[![Docker Build](https://github.com/Noooste/garage-ui/actions/workflows/build.yml/badge.svg)](https://github.com/Noooste/garage-ui/actions/workflows/build.yml)
-[![Helm Chart](https://github.com/Noooste/garage-ui/actions/workflows/release.yml/badge.svg)](https://github.com/Noooste/garage-ui/actions/workflows/release.yml)
-[![Coverage](https://codecov.io/gh/Noooste/garage-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/Noooste/garage-ui)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go)](https://go.dev/)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/garage-ui)](https://artifacthub.io/packages/search?repo=garage-ui)
+A modern web interface to manage <a href="https://garagehq.deuxfleurs.fr/">Garage</a> object storage clusters. Browse buckets, manage access keys, monitor your cluster, all from your browser.
 
 ---
 
@@ -24,57 +26,55 @@ A web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) object st
 
 ## Features
 
-- Bucket and object management
-- User access control
-- Cluster monitoring
-- Multiple authentication options (none/basic/OIDC/token)
-- Direct `garage.toml` reading for zero-config setup
-- Drag-and-drop file uploads
+- **Bucket management** - create, configure, and browse buckets with drag-and-drop file uploads
+- **Access key management** - create keys, assign per-bucket permissions
+- **Cluster overview** - monitor node status, layout configuration, and storage usage
+- **Flexible authentication** - no auth, basic credentials, or OIDC (Keycloak, Authentik, etc.)
+- **Easy deployment** - single Docker image or Helm chart, configure with one YAML file
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker & Docker Compose
-- Garage S3 cluster (v2.1.0+) or use the included setup
+- A running Garage cluster (v2.1.0+) - [setup guide](docs/garage-setup.md) if you need one
 
-### 1. Clone & Setup
+### 1. Clone & Configure
 
 ```bash
 git clone https://github.com/Noooste/garage-ui.git
 cd garage-ui
-```
-
-### 2. Start Garage
-
-If you don't have Garage running:
-
-```bash
-docker compose up -d garage
-sleep 10
-
-# Initialize cluster
-docker compose exec garage garage layout assign -z dc1 -c 1G $(docker compose exec garage garage node id -q)
-docker compose exec garage garage layout apply --version 1
-
-# Create admin key
-docker compose exec garage garage key create admin-key
-```
-
-Save the access key and secret key from the output.
-
-### 3. Configure
-
-```bash
-cp config.yaml.example config.yaml
+cp config.example.yaml config.yaml
 ```
 
 Edit `config.yaml` with your Garage endpoints and admin token (from `garage.toml`).
 
-### 4. Start UI
+### 2. Start
 
 ```bash
 docker compose up -d garage-ui
+```
+
+Access at http://localhost:8080
+
+## Deployment
+
+### Docker
+
+```bash
+docker run -d -p 8080:8080 \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  noooste/garage-ui:latest
+```
+
+### Kubernetes
+
+```bash
+helm repo add garage-ui https://helm.noste.dev/
+helm install garage-ui garage-ui/garage-ui \
+  --set garage.endpoint=http://garage:3900 \
+  --set garage.adminEndpoint=http://garage:3903 \
+  --set garage.adminToken=your-token
 ```
 
 Access at http://localhost:8080
@@ -127,17 +127,7 @@ garage:
   region: "garage"
 ```
 
-Enable authentication (optional):
-
-```yaml
-auth:
-  admin:
-    enabled: true
-    username: "admin"
-    password: "your-password"
-```
-
-See [config.yaml.example](config.yaml.example) for all options.
+See [config.example.yaml](config.example.yaml) for all options including authentication, CORS, and logging.
 
 ### Environment Variables
 
@@ -148,43 +138,6 @@ GARAGE_UI_SERVER_PORT=8080
 GARAGE_UI_GARAGE_ENDPOINT=http://garage:3900
 GARAGE_UI_GARAGE_ADMIN_TOKEN=your-token
 ```
-
-## Deployment
-
-### Docker
-
-```bash
-docker run -d -p 8080:8080 \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  noooste/garage-ui:latest
-```
-
-### Kubernetes
-
-```bash
-helm repo add garage-ui https://helm.noste.dev/
-helm install garage-ui garage-ui/garage-ui \
-  --set garage.endpoint=http://garage:3900 \
-  --set garage.adminEndpoint=http://garage:3903 \
-  --set garage.adminToken=your-token
-```
-
-## Development
-
-Backend (Go 1.25+):
-```bash
-cd backend
-go run main.go --config ../config.yaml
-```
-
-Frontend (Node.js 25+):
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-API docs: http://localhost:8080/api/v1/
 
 ## Garage Configuration
 
@@ -205,6 +158,23 @@ api_bind_addr = "[::]:3900"      # Default: 127.0.0.1:3900
 **Important:** The `admin_token` and `s3_region` in `garage.toml` must match your Garage UI `config.yaml`.
 
 For complete Garage configuration, see the [official documentation](https://garagehq.deuxfleurs.fr/documentation/reference-manual/configuration/).
+
+## Development
+
+Backend (Go 1.25+):
+```bash
+cd backend
+go run main.go --config ../config.yaml
+```
+
+Frontend (Node.js 25+):
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+API docs: http://localhost:8080/api/v1/
 
 ## Troubleshooting
 
@@ -244,11 +214,12 @@ Ideas being considered. Contributions welcome.
 - [ ] Per-bucket usage graph over time
 
 **Access keys**
-- [ ] Permission matrix view (keys × buckets)
+- [ ] Permission matrix view (keys x buckets)
 - [ ] Key rotation helper
 - [ ] Copy-ready snippets per key (aws-cli, rclone, restic, s3cmd, mc, Terraform)
 
 **Cluster**
+- [X] Support Garage v1 to latest
 - [ ] Visual layout editor with staged vs. applied diff
 - [ ] Capacity planner / simulation
 - [ ] Rebalance progress and node health timeline

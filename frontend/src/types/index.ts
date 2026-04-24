@@ -232,6 +232,15 @@ export interface MultiNodeStatisticsResponse {
   error: Record<string, string>;
 }
 
+export interface GarageCapabilities {
+  garageApiVersion: string;
+  features: {
+    clusterStatistics: boolean;
+    nodeInfo: boolean;
+    nodeStatistics: boolean;
+  };
+}
+
 export interface NodeInfo {
   nodeId: string;
   version: string;

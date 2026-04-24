@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 
@@ -69,14 +71,17 @@ func (h *ClusterHandler) GetStatus(c fiber.Ctx) error {
 // GET /api/v1/cluster/statistics
 func (h *ClusterHandler) GetStatistics(c fiber.Ctx) error {
 	ctx := c.Context()
-
 	stats, err := h.adminService.GetClusterStatistics(ctx)
 	if err != nil {
+		if errors.Is(err, services.ErrUnsupported) {
+			return c.Status(fiber.StatusNotImplemented).JSON(
+				models.ErrorResponse(models.ErrCodeUnsupported, "This feature requires Garage v2.0+"),
+			)
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get cluster statistics: "+err.Error()),
 		)
 	}
-
 	return c.JSON(models.SuccessResponse(stats))
 }
 
@@ -95,20 +100,22 @@ func (h *ClusterHandler) GetStatistics(c fiber.Ctx) error {
 func (h *ClusterHandler) GetNodeInfo(c fiber.Ctx) error {
 	ctx := c.Context()
 	nodeID := c.Params("node_id")
-
 	if nodeID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(
 			models.ErrorResponse(models.ErrCodeBadRequest, "Node ID is required"),
 		)
 	}
-
 	info, err := h.adminService.GetNodeInfo(ctx, nodeID)
 	if err != nil {
+		if errors.Is(err, services.ErrUnsupported) {
+			return c.Status(fiber.StatusNotImplemented).JSON(
+				models.ErrorResponse(models.ErrCodeUnsupported, "This feature requires Garage v2.0+"),
+			)
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get node info: "+err.Error()),
 		)
 	}
-
 	return c.JSON(models.SuccessResponse(info))
 }
 
@@ -127,19 +134,21 @@ func (h *ClusterHandler) GetNodeInfo(c fiber.Ctx) error {
 func (h *ClusterHandler) GetNodeStatistics(c fiber.Ctx) error {
 	ctx := c.Context()
 	nodeID := c.Params("node_id")
-
 	if nodeID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(
 			models.ErrorResponse(models.ErrCodeBadRequest, "Node ID is required"),
 		)
 	}
-
 	stats, err := h.adminService.GetNodeStatistics(ctx, nodeID)
 	if err != nil {
+		if errors.Is(err, services.ErrUnsupported) {
+			return c.Status(fiber.StatusNotImplemented).JSON(
+				models.ErrorResponse(models.ErrCodeUnsupported, "This feature requires Garage v2.0+"),
+			)
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get node statistics: "+err.Error()),
 		)
 	}
-
 	return c.JSON(models.SuccessResponse(stats))
 }

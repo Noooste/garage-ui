@@ -36,7 +36,7 @@ jobs:
       - name: Run unit tests with race detector and coverage
         run: |
           cd backend
-          go test -race -coverprofile=../coverage.out -coverpkg=./... ./...
+          go test -race -count=1 -coverprofile=../coverage.out -coverpkg=./... ./...
 
       - name: Enforce coverage gate
         run: bash scripts/coverage-gate.sh coverage.out

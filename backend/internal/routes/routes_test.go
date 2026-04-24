@@ -14,6 +14,7 @@ import (
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
+	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/services/mocks"
 
 	"github.com/gofiber/fiber/v3"
@@ -67,6 +68,7 @@ func newTestApp(t *testing.T, cfgMutator func(*config.Config)) *routeFixture {
 		handlers.NewUserHandler(admin),
 		handlers.NewClusterHandler(admin),
 		handlers.NewMonitoringHandler(admin, s3),
+		handlers.NewCapabilitiesHandler("v2", services.CapabilitiesV2()),
 	)
 
 	return &routeFixture{App: app, Admin: admin, S3: s3, Auth: svc, Cfg: cfg}

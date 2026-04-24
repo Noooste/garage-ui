@@ -16,13 +16,13 @@ import (
 )
 
 // newAdminTestServer wires an httptest.Server (with the supplied handler) to a
-// fresh *GarageAdminService configured with a known bearer token.
-func newAdminTestServer(t *testing.T, handler http.Handler) (*GarageAdminService, *httptest.Server) {
+// fresh *GarageV2AdminService configured with a known bearer token.
+func newAdminTestServer(t *testing.T, handler http.Handler) (*GarageV2AdminService, *httptest.Server) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	svc := NewGarageAdminService(&config.GarageConfig{
+	svc := NewGarageV2AdminService(&config.GarageConfig{
 		AdminEndpoint: srv.URL,
 		AdminToken:    "test-token-xyz",
 	}, "")
@@ -326,12 +326,12 @@ func TestDeleteBucket_PostWithIDQuery(t *testing.T) {
 func TestBucketAliasAndPermissionEndpoints(t *testing.T) {
 	cases := []struct {
 		name string
-		fn   func(s *GarageAdminService) error
+		fn   func(s *GarageV2AdminService) error
 		path string
 	}{
 		{
 			name: "AddBucketAlias",
-			fn: func(s *GarageAdminService) error {
+			fn: func(s *GarageV2AdminService) error {
 				_, err := s.AddBucketAlias(context.Background(), models.AddBucketAliasRequest{})
 				return err
 			},
@@ -339,7 +339,7 @@ func TestBucketAliasAndPermissionEndpoints(t *testing.T) {
 		},
 		{
 			name: "RemoveBucketAlias",
-			fn: func(s *GarageAdminService) error {
+			fn: func(s *GarageV2AdminService) error {
 				_, err := s.RemoveBucketAlias(context.Background(), models.RemoveBucketAliasRequest{})
 				return err
 			},
@@ -347,7 +347,7 @@ func TestBucketAliasAndPermissionEndpoints(t *testing.T) {
 		},
 		{
 			name: "AllowBucketKey",
-			fn: func(s *GarageAdminService) error {
+			fn: func(s *GarageV2AdminService) error {
 				_, err := s.AllowBucketKey(context.Background(), models.BucketKeyPermRequest{})
 				return err
 			},
@@ -355,7 +355,7 @@ func TestBucketAliasAndPermissionEndpoints(t *testing.T) {
 		},
 		{
 			name: "DenyBucketKey",
-			fn: func(s *GarageAdminService) error {
+			fn: func(s *GarageV2AdminService) error {
 				_, err := s.DenyBucketKey(context.Background(), models.BucketKeyPermRequest{})
 				return err
 			},
@@ -379,12 +379,12 @@ func TestBucketAliasAndPermissionEndpoints(t *testing.T) {
 func TestClusterEndpoints(t *testing.T) {
 	cases := []struct {
 		name string
-		fn   func(s *GarageAdminService) error
+		fn   func(s *GarageV2AdminService) error
 		path string
 	}{
 		{
 			name: "GetClusterHealth",
-			fn: func(s *GarageAdminService) error {
+			fn: func(s *GarageV2AdminService) error {
 				_, err := s.GetClusterHealth(context.Background())
 				return err
 			},
@@ -392,7 +392,7 @@ func TestClusterEndpoints(t *testing.T) {
 		},
 		{
 			name: "GetClusterStatus",
-			fn: func(s *GarageAdminService) error {
+			fn: func(s *GarageV2AdminService) error {
 				_, err := s.GetClusterStatus(context.Background())
 				return err
 			},
@@ -400,7 +400,7 @@ func TestClusterEndpoints(t *testing.T) {
 		},
 		{
 			name: "GetClusterStatistics",
-			fn: func(s *GarageAdminService) error {
+			fn: func(s *GarageV2AdminService) error {
 				_, err := s.GetClusterStatistics(context.Background())
 				return err
 			},
@@ -427,12 +427,12 @@ func TestClusterEndpoints(t *testing.T) {
 func TestNodeEndpoints_NodeIDInQuery(t *testing.T) {
 	cases := []struct {
 		name string
-		fn   func(s *GarageAdminService, id string) error
+		fn   func(s *GarageV2AdminService, id string) error
 		path string
 	}{
 		{
 			name: "GetNodeInfo",
-			fn: func(s *GarageAdminService, id string) error {
+			fn: func(s *GarageV2AdminService, id string) error {
 				_, err := s.GetNodeInfo(context.Background(), id)
 				return err
 			},
@@ -440,7 +440,7 @@ func TestNodeEndpoints_NodeIDInQuery(t *testing.T) {
 		},
 		{
 			name: "GetNodeStatistics",
-			fn: func(s *GarageAdminService, id string) error {
+			fn: func(s *GarageV2AdminService, id string) error {
 				_, err := s.GetNodeStatistics(context.Background(), id)
 				return err
 			},
@@ -576,10 +576,10 @@ func TestAllMethods_Non2xxReturnsError(t *testing.T) {
 	}
 }
 
-// TestDebugLogLevelEnablesSessionLog exercises the NewGarageAdminService
+// TestDebugLogLevelEnablesSessionLog exercises the NewGarageV2AdminService
 // branch that enables azuretls' session logging when logLevel == "debug".
 func TestDebugLogLevelEnablesSessionLog(t *testing.T) {
-	svc := NewGarageAdminService(&config.GarageConfig{
+	svc := NewGarageV2AdminService(&config.GarageConfig{
 		AdminEndpoint: "http://127.0.0.1:1",
 		AdminToken:    "t",
 	}, "debug")
@@ -598,7 +598,7 @@ func TestDoRequest_RetriesExhaustOnConnectionRefused(t *testing.T) {
 		t.Fatalf("close listener: %v", err)
 	}
 
-	svc := NewGarageAdminService(&config.GarageConfig{
+	svc := NewGarageV2AdminService(&config.GarageConfig{
 		AdminEndpoint: "http://" + addr,
 		AdminToken:    "irrelevant",
 	}, "")

@@ -29,6 +29,7 @@ func SetupRoutes(
 	userHandler *handlers.UserHandler,
 	clusterHandler *handlers.ClusterHandler,
 	monitoringHandler *handlers.MonitoringHandler,
+	capabilitiesHandler *handlers.CapabilitiesHandler,
 ) {
 	// Apply CORS middleware globally
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
@@ -51,6 +52,8 @@ func SetupRoutes(
 
 	// Apply authentication middleware to all API routes
 	api.Use(middleware.AuthMiddleware(&cfg.Auth, authService))
+
+	api.Get("/capabilities", capabilitiesHandler.GetCapabilities)
 
 	// Bucket routes
 	buckets := api.Group("/buckets")
