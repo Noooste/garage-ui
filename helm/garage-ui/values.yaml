@@ -84,9 +84,13 @@ config:
       email_attribute: "email"
       username_attribute: "preferred_username"
       name_attribute: "name"
-      # Role-based access control
+      # Role-based access control.
+      # Set admin_role (single value, backward-compatible) and/or admin_roles
+      # (list). Values from both are merged: a user is granted admin if ANY
+      # of their roles matches ANY entry across these two fields.
       role_attribute_path: "resource_access.garage-ui.roles"
       admin_role: "admin"
+      admin_roles: []
       # TLS settings
       tls_skip_verify: false
       # Session settings

@@ -236,7 +236,8 @@ func SetupRoutes(
 				// ID token and the userinfo endpoint (Keycloak emits resource_access
 				// only in the access token by default), so fall back to the access
 				// token and then the userinfo endpoint before denying access.
-				if cfg.Auth.OIDC.AdminRole != "" {
+				adminRoles := cfg.Auth.OIDC.EffectiveAdminRoles()
+				if len(adminRoles) > 0 {
 					if !authService.IsAdmin(userInfo) {
 						if roles := authService.ExtractRolesFromAccessToken(token.AccessToken); len(roles) > 0 {
 							userInfo.Roles = roles
@@ -250,9 +251,9 @@ func SetupRoutes(
 					if !authService.IsAdmin(userInfo) {
 						logger.Warn().
 							Str("username", userInfo.Username).
-							Str("required_role", cfg.Auth.OIDC.AdminRole).
+							Strs("required_roles", adminRoles).
 							Strs("roles", userInfo.Roles).
-							Msg("OIDC login denied: user does not have required admin role")
+							Msg("OIDC login denied: user does not have any required admin role")
 						return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 							"error": "User does not have the required admin role",
 						})

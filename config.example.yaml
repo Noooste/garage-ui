@@ -75,7 +75,14 @@ auth:
 
     # Role-based access (optional)
     role_attribute_path: "resource_access.garage-ui.roles"
+    # Single admin role (backward-compatible).
     admin_role: "admin"
+    # Multiple admin roles: a user is granted admin if ANY of their roles
+    # matches ANY entry below. Values from admin_role and admin_roles are
+    # merged, so you can set either, both, or only admin_roles.
+    # admin_roles:
+    #   - "garage-admins"
+    #   - "platform-team"
 
     # TLS configuration
     tls_skip_verify: false # Only set to true for testing, not recommended for production

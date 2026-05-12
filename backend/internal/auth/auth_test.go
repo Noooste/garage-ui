@@ -609,23 +609,35 @@ func TestExtractRolesFromAccessToken_BadJSONInPayload(t *testing.T) {
 
 func TestIsAdmin(t *testing.T) {
 	tests := []struct {
-		name      string
-		adminRole string
-		userRoles []string
-		want      bool
+		name       string
+		adminRole  string
+		adminRoles []string
+		userRoles  []string
+		want       bool
 	}{
-		{"empty admin role config returns false", "", []string{"admin"}, false},
-		{"user has admin role", "admin", []string{"viewer", "admin"}, true},
-		{"user lacks admin role", "admin", []string{"viewer"}, false},
-		{"user has no roles", "admin", nil, false},
-		{"role match is exact (case-sensitive)", "admin", []string{"Admin"}, false},
+		{"empty admin role config returns false", "", nil, []string{"admin"}, false},
+		{"user has admin role", "admin", nil, []string{"viewer", "admin"}, true},
+		{"user lacks admin role", "admin", nil, []string{"viewer"}, false},
+		{"user has no roles", "admin", nil, nil, false},
+		{"role match is exact (case-sensitive)", "admin", nil, []string{"Admin"}, false},
+
+		// admin_roles list
+		{"user matches first entry in admin_roles", "", []string{"group1", "group2"}, []string{"group1"}, true},
+		{"user matches second entry in admin_roles", "", []string{"group1", "group2"}, []string{"group2"}, true},
+		{"user matches none of admin_roles", "", []string{"group1", "group2"}, []string{"group3"}, false},
+		{"empty admin_roles list returns false", "", []string{}, []string{"group1"}, false},
+
+		// admin_role + admin_roles merge
+		{"matches single admin_role when admin_roles set too", "admin", []string{"ops"}, []string{"admin"}, true},
+		{"matches admin_roles entry when admin_role set too", "admin", []string{"ops"}, []string{"ops"}, true},
+		{"matches neither admin_role nor admin_roles", "admin", []string{"ops"}, []string{"viewer"}, false},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := &Service{
 				authConfig: &config.AuthConfig{
-					OIDC: config.OIDCConfig{AdminRole: tc.adminRole},
+					OIDC: config.OIDCConfig{AdminRole: tc.adminRole, AdminRoles: tc.adminRoles},
 				},
 			}
 			if got := svc.IsAdmin(&UserInfo{Roles: tc.userRoles}); got != tc.want {

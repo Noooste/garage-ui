@@ -78,12 +78,36 @@ type OIDCConfig struct {
 	NameAttribute     string   `mapstructure:"name_attribute"`
 	RoleAttributePath string   `mapstructure:"role_attribute_path"`
 	AdminRole         string   `mapstructure:"admin_role"`
+	AdminRoles        []string `mapstructure:"admin_roles"`
 	TLSSkipVerify     bool     `mapstructure:"tls_skip_verify"`
 	SessionMaxAge     int      `mapstructure:"session_max_age"`
 	CookieName        string   `mapstructure:"cookie_name"`
 	CookieSecure      bool     `mapstructure:"cookie_secure"`
 	CookieHTTPOnly    bool     `mapstructure:"cookie_http_only"`
 	CookieSameSite    string   `mapstructure:"cookie_same_site"`
+}
+
+// EffectiveAdminRoles returns the deduplicated list of admin roles drawn from
+// both admin_role (legacy single-value) and admin_roles (list). A user is
+// considered an admin if any of their roles matches any entry in this list.
+func (o OIDCConfig) EffectiveAdminRoles() []string {
+	seen := make(map[string]struct{}, len(o.AdminRoles)+1)
+	var roles []string
+	add := func(r string) {
+		if r == "" {
+			return
+		}
+		if _, ok := seen[r]; ok {
+			return
+		}
+		seen[r] = struct{}{}
+		roles = append(roles, r)
+	}
+	add(o.AdminRole)
+	for _, r := range o.AdminRoles {
+		add(r)
+	}
+	return roles
 }
 
 // CORSConfig contains CORS settings for frontend communication
@@ -231,6 +255,7 @@ func bindEnvVars() {
 	viper.BindEnv("auth.oidc.name_attribute", "GARAGE_UI_AUTH_OIDC_NAME_ATTRIBUTE")
 	viper.BindEnv("auth.oidc.role_attribute_path", "GARAGE_UI_AUTH_OIDC_ROLE_ATTRIBUTE_PATH")
 	viper.BindEnv("auth.oidc.admin_role", "GARAGE_UI_AUTH_OIDC_ADMIN_ROLE")
+	viper.BindEnv("auth.oidc.admin_roles", "GARAGE_UI_AUTH_OIDC_ADMIN_ROLES")
 	viper.BindEnv("auth.oidc.tls_skip_verify", "GARAGE_UI_AUTH_OIDC_TLS_SKIP_VERIFY")
 	viper.BindEnv("auth.oidc.session_max_age", "GARAGE_UI_AUTH_OIDC_SESSION_MAX_AGE")
 	viper.BindEnv("auth.oidc.cookie_name", "GARAGE_UI_AUTH_OIDC_COOKIE_NAME")
@@ -291,11 +316,12 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("oidc scopes are required when oidc is enabled")
 		}
 		// Every authenticated route on this service grants full admin
-		// access — there is no separate authorization layer. An empty
-		// admin_role would therefore promote every user in the IdP realm
-		// to cluster admin. Require operators to opt in explicitly.
-		if c.Auth.OIDC.AdminRole == "" {
-			return fmt.Errorf("oidc admin_role is required when oidc is enabled: leaving it empty would grant cluster-admin access to any authenticated IdP user")
+		// access — there is no separate authorization layer. Empty
+		// admin role configuration would therefore promote every user
+		// in the IdP realm to cluster admin. Require operators to opt
+		// in explicitly via admin_role or admin_roles.
+		if len(c.Auth.OIDC.EffectiveAdminRoles()) == 0 {
+			return fmt.Errorf("oidc admin_role or admin_roles is required when oidc is enabled: leaving them empty would grant cluster-admin access to any authenticated IdP user")
 		}
 	}
 

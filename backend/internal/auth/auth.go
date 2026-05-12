@@ -252,15 +252,18 @@ func (a *Service) ExtractRolesFromAccessToken(accessToken string) []string {
 	return extractRoles(claims, a.authConfig.OIDC.RoleAttributePath)
 }
 
-// IsAdmin checks if the user has admin role
+// IsAdmin checks if the user has any of the configured admin roles.
 func (a *Service) IsAdmin(userInfo *UserInfo) bool {
-	if a.authConfig.OIDC.AdminRole == "" {
+	adminRoles := a.authConfig.OIDC.EffectiveAdminRoles()
+	if len(adminRoles) == 0 {
 		return false
 	}
 
 	for _, role := range userInfo.Roles {
-		if role == a.authConfig.OIDC.AdminRole {
-			return true
+		for _, adminRole := range adminRoles {
+			if role == adminRole {
+				return true
+			}
 		}
 	}
 

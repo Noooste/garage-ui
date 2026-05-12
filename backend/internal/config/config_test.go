@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -292,7 +293,33 @@ func TestValidate(t *testing.T) {
 				applyValidOIDC(c)
 				c.Auth.OIDC.AdminRole = ""
 			},
-			wantErrContains: "oidc admin_role is required",
+			wantErrContains: "oidc admin_role or admin_roles is required",
+		},
+		{
+			name: "oidc enabled with admin_roles only is valid",
+			mutate: func(c *Config) {
+				applyValidOIDC(c)
+				c.Auth.OIDC.AdminRole = ""
+				c.Auth.OIDC.AdminRoles = []string{"group1", "group2"}
+			},
+			wantErrContains: "",
+		},
+		{
+			name: "oidc enabled with both admin_role and admin_roles is valid",
+			mutate: func(c *Config) {
+				applyValidOIDC(c)
+				c.Auth.OIDC.AdminRoles = []string{"group2", "group3"}
+			},
+			wantErrContains: "",
+		},
+		{
+			name: "oidc enabled with empty admin_role and empty admin_roles rejected",
+			mutate: func(c *Config) {
+				applyValidOIDC(c)
+				c.Auth.OIDC.AdminRole = ""
+				c.Auth.OIDC.AdminRoles = []string{}
+			},
+			wantErrContains: "oidc admin_role or admin_roles is required",
 		},
 		{
 			name:            "oidc fully configured is valid",
@@ -495,6 +522,32 @@ func TestValidate_TokenAuthExplicitlyEnabled(t *testing.T) {
 	cfg.ResolveTokenAuth()
 	if !cfg.Auth.Token.Enabled {
 		t.Error("expected token auth to stay enabled when explicitly set")
+	}
+}
+
+func TestEffectiveAdminRoles(t *testing.T) {
+	tests := []struct {
+		name       string
+		adminRole  string
+		adminRoles []string
+		want       []string
+	}{
+		{"both empty", "", nil, nil},
+		{"single only", "admin", nil, []string{"admin"}},
+		{"list only", "", []string{"a", "b"}, []string{"a", "b"}},
+		{"merge single + list", "admin", []string{"viewer", "ops"}, []string{"admin", "viewer", "ops"}},
+		{"dedupes overlap", "admin", []string{"admin", "ops"}, []string{"admin", "ops"}},
+		{"dedupes within list", "", []string{"a", "a", "b"}, []string{"a", "b"}},
+		{"skips empty strings in list", "admin", []string{"", "ops", ""}, []string{"admin", "ops"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			o := OIDCConfig{AdminRole: tc.adminRole, AdminRoles: tc.adminRoles}
+			got := o.EffectiveAdminRoles()
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("EffectiveAdminRoles() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
