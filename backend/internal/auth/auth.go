@@ -4,9 +4,11 @@ import (
 	"Noooste/garage-ui/pkg/logger"
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"Noooste/garage-ui/internal/config"
@@ -22,6 +24,7 @@ type Service struct {
 	oidcProvider *oidc.Provider
 	oidcVerifier *oidc.IDTokenVerifier
 	oauth2Config *oauth2.Config
+	oidcClient   *http.Client
 	jwtService   *JWTService
 }
 
@@ -58,7 +61,15 @@ func NewAuthService(authCfg *config.AuthConfig, serverCfg *config.ServerConfig) 
 
 // initOIDC initializes the OIDC provider and configuration
 func (a *Service) initOIDC() error {
-	ctx := context.Background()
+	if a.authConfig.OIDC.TLSSkipVerify {
+		a.oidcClient = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+	}
+
+	ctx := a.oidcContext(context.Background())
 
 	// Create OIDC provider
 	provider, err := oidc.NewProvider(ctx, a.authConfig.OIDC.IssuerURL)
@@ -92,6 +103,13 @@ func (a *Service) initOIDC() error {
 	return nil
 }
 
+func (a *Service) oidcContext(ctx context.Context) context.Context {
+	if a.oidcClient == nil {
+		return ctx
+	}
+	return oidc.ClientContext(ctx, a.oidcClient)
+}
+
 // ValidateBasicAuth validates basic authentication credentials
 func (a *Service) ValidateBasicAuth(username, password string) bool {
 	// Use constant-time comparison to prevent timing attacks
@@ -123,7 +141,7 @@ func (a *Service) ExchangeCode(ctx context.Context, code string) (*oauth2.Token,
 		return nil, fmt.Errorf("OIDC not initialized")
 	}
 
-	token, err := a.oauth2Config.Exchange(ctx, code)
+	token, err := a.oauth2Config.Exchange(a.oidcContext(ctx), code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}
@@ -138,7 +156,7 @@ func (a *Service) VerifyIDToken(ctx context.Context, rawIDToken string) (*UserIn
 	}
 
 	// Verify the ID token
-	idToken, err := a.oidcVerifier.Verify(ctx, rawIDToken)
+	idToken, err := a.oidcVerifier.Verify(a.oidcContext(ctx), rawIDToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify ID token: %w", err)
 	}
@@ -169,6 +187,8 @@ func (a *Service) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserIn
 	if a.oidcProvider == nil {
 		return nil, fmt.Errorf("OIDC not initialized")
 	}
+
+	ctx = a.oidcContext(ctx)
 
 	// Create OAuth2 token source
 	tokenSource := a.oauth2Config.TokenSource(ctx, token)

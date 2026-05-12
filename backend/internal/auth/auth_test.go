@@ -268,6 +268,86 @@ func TestNewAuthService_OIDCEnabled_DiscoversProvider(t *testing.T) {
 	}
 }
 
+// newTLSDiscoveryServer is the same as newDiscoveryServer but serves the OIDC
+// discovery document over HTTPS using httptest's self-signed certificate. The
+// cert is not signed by any system-trusted CA, so any HTTP client without
+// InsecureSkipVerify (or the cert pinned) will fail to connect.
+func newTLSDiscoveryServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	var srv *httptest.Server
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		doc := map[string]any{
+			"issuer":                                srv.URL,
+			"authorization_endpoint":                srv.URL + "/auth",
+			"token_endpoint":                        srv.URL + "/token",
+			"jwks_uri":                              srv.URL + "/jwks",
+			"userinfo_endpoint":                     srv.URL + "/userinfo",
+			"id_token_signing_alg_values_supported": []string{"RS256", "EdDSA"},
+			"response_types_supported":              []string{"code"},
+			"subject_types_supported":               []string{"public"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(doc)
+	})
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"keys":[]}`))
+	})
+	srv = httptest.NewTLSServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestNewAuthService_OIDCEnabled_SelfSignedIssuer_FailsWithoutTLSSkipVerify(t *testing.T) {
+	disco := newTLSDiscoveryServer(t)
+
+	authCfg := &config.AuthConfig{
+		OIDC: config.OIDCConfig{
+			Enabled:       true,
+			ClientID:      "test-client",
+			IssuerURL:     disco.URL,
+			Scopes:        []string{"openid"},
+			TLSSkipVerify: false,
+		},
+	}
+	srvCfg := &config.ServerConfig{RootURL: "https://garage-ui.example"}
+
+	_, err := NewAuthService(authCfg, srvCfg)
+	if err == nil {
+		t.Fatal("expected TLS verification error from self-signed issuer, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to initialize OIDC") {
+		t.Errorf("expected wrapping error, got %v", err)
+	}
+}
+
+func TestNewAuthService_OIDCEnabled_SelfSignedIssuer_SucceedsWithTLSSkipVerify(t *testing.T) {
+	disco := newTLSDiscoveryServer(t)
+
+	authCfg := &config.AuthConfig{
+		OIDC: config.OIDCConfig{
+			Enabled:       true,
+			ClientID:      "test-client",
+			IssuerURL:     disco.URL,
+			Scopes:        []string{"openid"},
+			TLSSkipVerify: true,
+		},
+	}
+	srvCfg := &config.ServerConfig{RootURL: "https://garage-ui.example"}
+
+	svc, err := NewAuthService(authCfg, srvCfg)
+	if err != nil {
+		t.Fatalf("NewAuthService with tls_skip_verify=true should succeed: %v", err)
+	}
+	if svc.oidcProvider == nil {
+		t.Fatal("oidcProvider not initialized")
+	}
+	if svc.oidcClient == nil {
+		t.Fatal("oidcClient should be set when tls_skip_verify=true")
+	}
+}
+
 func TestNewAuthService_OIDCEnabled_BadIssuerURLReturnsError(t *testing.T) {
 	authCfg := &config.AuthConfig{
 		OIDC: config.OIDCConfig{
