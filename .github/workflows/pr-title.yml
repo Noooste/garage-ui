@@ -1,0 +1,38 @@
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            test
+            ci
+            build
+            perf
+          scopes: |
+            backend
+            frontend
+            helm
+            ci
+            deps
+          requireScope: false
+          subjectPattern: ^[A-Za-z].+[^.]$
+          subjectPatternError: |
+            PR title subject must start with a letter and not end with a period.
+            Example: "feat(helm): add support for extraEnvs"

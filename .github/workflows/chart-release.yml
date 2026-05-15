@@ -1,17 +1,16 @@
-name: release
+name: chart-release
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'helm/garage-ui/**'
-      - '!helm/garage-ui/README.md'
+    tags:
+      - 'garage-ui-chart-v*'
+
+permissions:
+  contents: write
+  pages: write
 
 jobs:
   release:
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -33,5 +32,6 @@ jobs:
         uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: helm
+          skip_existing: true
         env:
-          CR_TOKEN: "${{ secrets.HELM_RELEASE_TOKEN }}"
+          CR_TOKEN: ${{ secrets.HELM_RELEASE_TOKEN }}

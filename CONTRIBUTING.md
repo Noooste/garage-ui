@@ -130,3 +130,61 @@ Enhancement suggestions are tracked as [GitHub issues](https://github.com/Nooost
 - **Describe the current behavior** and **explain which behavior you expected to see instead** and why. At this point you can also tell which alternatives do not work for you.
 - You may want to **include screenshots or screen recordings** which help you demonstrate the steps or point out the part which the suggestion is related to. You can use [LICEcap](https://www.cockos.com/licecap/) to record GIFs on macOS and Windows, and the built-in [screen recorder in GNOME](https://help.gnome.org/users/gnome-help/stable/screen-shot-record.html.en) or [SimpleScreenRecorder](https://github.com/MaartenBaert/ssr) on Linux. <!-- this should only be included if the project has a GUI -->
 - **Explain why this enhancement would be useful** to most Garage UI users. You may also want to point out the other projects that solved it better and which could serve as inspiration.
+
+
+## Commit Messages
+
+This repo uses [Conventional Commits](https://www.conventionalcommits.org/) on
+PR titles to drive automated releases and changelogs via
+[release-please](https://github.com/googleapis/release-please).
+
+PRs are squash-merged, so **only the PR title needs to follow the format**.
+Branch commits can be anything.
+
+### Format
+
+```
+<type>(<optional-scope>): <subject>
+```
+
+### Allowed types
+
+| Type       | Use when…                                | Triggers release? |
+|------------|------------------------------------------|-------------------|
+| `feat`     | adding new user-facing functionality     | minor bump        |
+| `fix`      | fixing a bug                             | patch bump        |
+| `feat!`    | breaking change (pre-1.0: still minor)   | minor bump        |
+| `perf`     | performance improvement                  | patch bump        |
+| `docs`     | documentation only                       | no                |
+| `refactor` | code change that's not feat/fix          | no                |
+| `chore`    | tooling, deps, build                     | no                |
+| `test`     | adding/fixing tests                      | no                |
+| `ci`       | CI workflow changes                      | no                |
+| `build`    | build system changes                     | no                |
+
+Pre-1.0 SemVer: while the project is `<1.0`, breaking changes (`feat!`) bump
+the **minor** version, not the major. Once the project declares `1.0.0`,
+`feat!` will bump major as per standard SemVer.
+
+### Allowed scopes
+
+- `backend` — Go API server
+- `frontend` — React app
+- `helm` — Helm chart
+- `ci` — CI workflows
+- `deps` — dependency updates
+
+Scope is optional. Use it when the change is clearly scoped to one component
+(it routes the version bump to that component only).
+
+### Examples
+
+```
+feat(backend): add bucket quota enforcement
+fix(frontend): correct theme toggle in Safari
+feat(helm): support extraEnvs in deployment template
+chore(deps): bump axios from 1.15.0 to 1.15.2
+docs: clarify OIDC setup in README
+```
+
+The PR title is automatically validated by the `pr-title` GitHub Action.
