@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/Noooste/garage-ui/compare/v0.6.1...v0.6.2) (2026-05-15)
+
+
+### Bug Fixes
+
+* **helm:** update appVersion format and improve image tag handling ([709b9f2](https://github.com/Noooste/garage-ui/commit/709b9f2ad33fb3852bc23be1d647bb1d9388169b))
+
 ## [0.6.1](https://github.com/Noooste/garage-ui/compare/v0.6.0...v0.6.1) (2026-05-15)
 
 
