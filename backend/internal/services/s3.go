@@ -52,56 +52,77 @@ func NewS3Service(cfg *config.GarageConfig, adminService AdminService) *S3Servic
 	}
 }
 
-func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string) (*credentials.Credentials, error) {
-	cacheKey := fmt.Sprintf("key:%s", bucketName)
-	cacheData := utils.GlobalCache.Get(cacheKey)
+// Operation is a bitmask of S3 permissions a call needs. Combine with bitwise
+// OR (e.g. OpRead | OpWrite) when more than one is required.
+type Operation byte
 
-	if cacheData != nil {
-		return cacheData.(*credentials.Credentials), nil
+const (
+	OpRead  Operation = 0x1
+	OpWrite Operation = 0x2
+)
+
+// satisfies reports whether perms grants every bit set in op.
+func (op Operation) satisfies(perms models.BucketKeyPermission) bool {
+	if op&OpRead != 0 && !perms.Read {
+		return false
+	}
+	if op&OpWrite != 0 && !perms.Write {
+		return false
+	}
+	return true
+}
+
+func setKeyInCache(bucketName string, permissions models.BucketKeyPermission, creds *credentials.Credentials) {
+	canWrite := permissions.Write
+	canRead := permissions.Read
+
+	if canWrite {
+		key := fmt.Sprintf("key:%s:%d", bucketName, OpWrite)
+		utils.GlobalCache.Set(key, creds, time.Hour)
 	}
 
-	// Get bucket info from Garage Admin API
+	if canRead {
+		key := fmt.Sprintf("key:%s:%d", bucketName, OpRead)
+		utils.GlobalCache.Set(key, creds, time.Hour)
+	}
+
+	if canRead && canWrite {
+		key := fmt.Sprintf("key:%s:%d", bucketName, OpRead|OpWrite)
+		utils.GlobalCache.Set(key, creds, time.Hour)
+	}
+}
+
+func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string, op Operation) (*credentials.Credentials, error) {
+	cacheKey := fmt.Sprintf("key:%s:%d", bucketName, op)
+	if cached := utils.GlobalCache.Get(cacheKey); cached != nil {
+		return cached.(*credentials.Credentials), nil
+	}
+
 	bucketInfo, err := s.adminService.GetBucketInfoByAlias(ctx, bucketName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bucket info: %w", err)
 	}
 
-	// Find a key with read and write permissions
-	var accessKeyID, secretAccessKey string
 	for _, keyInfo := range bucketInfo.Keys {
-		if !keyInfo.Permissions.Read || !keyInfo.Permissions.Write {
+		if !op.satisfies(keyInfo.Permissions) {
 			continue
 		}
-
-		// Get key details with secret
 		keyDetails, err := s.adminService.GetKeyInfo(ctx, keyInfo.AccessKeyID, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get key info: %w", err)
+		if err != nil || keyDetails.SecretAccessKey == nil {
+			continue
 		}
-
-		if keyDetails.SecretAccessKey != nil {
-			accessKeyID = keyDetails.AccessKeyID
-			secretAccessKey = *keyDetails.SecretAccessKey
-			break
-		}
+		creds := credentials.NewStaticV4(keyDetails.AccessKeyID, *keyDetails.SecretAccessKey, "")
+		setKeyInCache(bucketName, keyInfo.Permissions, creds)
+		return creds, nil
 	}
 
-	if accessKeyID == "" || secretAccessKey == "" {
-		return nil, fmt.Errorf("no valid credentials found for bucket %s", bucketName)
-	}
-
-	// Create credentials
-	creds := credentials.NewStaticV4(accessKeyID, secretAccessKey, "")
-
-	// Cache credentials for 1 hour
-	utils.GlobalCache.Set(cacheKey, creds, time.Hour)
-
-	return creds, nil
+	return nil, fmt.Errorf("no valid credentials found for bucket %s", bucketName)
 }
 
-// getMinioClient creates a MinIO client for a specific bucket with dynamic credentials
-func (s *S3Service) getMinioClient(ctx context.Context, bucketName string) (*minio.Client, error) {
-	creds, err := s.getBucketCredentials(ctx, bucketName)
+// getMinioClient creates a MinIO client for a specific bucket with credentials
+// that satisfy op.
+func (s *S3Service) getMinioClient(ctx context.Context, bucketName string, op Operation) (*minio.Client, error) {
+	creds, err := s.getBucketCredentials(ctx, bucketName, op)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get credentials for bucket %s: %w", bucketName, err)
 	}
@@ -151,7 +172,7 @@ func (s *S3Service) ListBuckets(ctx context.Context) (*models.BucketListResponse
 
 // CreateBucket creates a new bucket in Garage
 func (s *S3Service) CreateBucket(ctx context.Context, bucketName string) error {
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpRead|OpWrite)
 	if err != nil {
 		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -172,7 +193,7 @@ func (s *S3Service) CreateBucket(ctx context.Context, bucketName string) error {
 
 // DeleteBucket deletes a bucket from Garage
 func (s *S3Service) DeleteBucket(ctx context.Context, bucketName string) error {
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpRead|OpWrite)
 	if err != nil {
 		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -192,7 +213,7 @@ func (s *S3Service) DeleteBucket(ctx context.Context, bucketName string) error {
 // ListObjects lists objects in a bucket with optional prefix filter and pagination
 func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error) {
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -313,7 +334,7 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 // UploadObject uploads an object to a bucket
 func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error) {
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -351,7 +372,7 @@ func (s *S3Service) UploadObject(ctx context.Context, bucketName, key string, bo
 // size=0 forces a single PutObject request with Content-Length: 0, which
 // Garage accepts as a directory marker.
 func (s *S3Service) CreateDirectoryMarker(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error) {
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -381,7 +402,7 @@ func (s *S3Service) CreateDirectoryMarker(ctx context.Context, bucketName, key s
 // GetObject retrieves an object from a bucket
 func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error) {
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -421,7 +442,7 @@ func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.R
 // DeleteObject deletes an object from a bucket
 func (s *S3Service) DeleteObject(ctx context.Context, bucketName, key string) error {
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
 	if err != nil {
 		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -441,7 +462,7 @@ func (s *S3Service) DeleteObject(ctx context.Context, bucketName, key string) er
 // ObjectExists checks if an object exists in a bucket
 func (s *S3Service) ObjectExists(ctx context.Context, bucketName, key string) (bool, error) {
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
 	if err != nil {
 		return false, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -469,7 +490,7 @@ func (s *S3Service) ObjectExists(ctx context.Context, bucketName, key string) (b
 // GetObjectMetadata retrieves metadata for an object without downloading it
 func (s *S3Service) GetObjectMetadata(ctx context.Context, bucketName, key string) (*models.ObjectInfo, error) {
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -505,7 +526,7 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 	}
 
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
 	if err != nil {
 		return fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -540,7 +561,7 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 // This is useful for sharing files without exposing credentials
 func (s *S3Service) GetPresignedURL(ctx context.Context, bucketName, key string, expiresIn time.Duration) (string, error) {
 	// Get bucket-specific MinIO client
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
 	if err != nil {
 		return "", fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
 	}
@@ -579,7 +600,7 @@ func (s *S3Service) UploadMultipleObjects(ctx context.Context, bucketName string
 	results := make([]UploadResult, len(files))
 
 	// Get bucket-specific MinIO client once for all uploads
-	client, err := s.getMinioClient(ctx, bucketName)
+	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
 	if err != nil {
 		// If we can't get the client, all uploads fail
 		for i := range files {
