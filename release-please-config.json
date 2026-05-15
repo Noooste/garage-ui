@@ -8,22 +8,22 @@
       "release-type": "go",
       "component": "garage-ui",
       "include-component-in-tag": false,
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "yaml",
+          "path": "helm/garage-ui/Chart.yaml",
+          "jsonpath": "$.appVersion",
+          "glob": false
+        }
+      ]
     },
     "helm/garage-ui": {
       "release-type": "helm",
       "component": "garage-ui-chart",
       "package-name": "garage-ui",
       "include-component-in-tag": true,
-      "changelog-path": "CHANGELOG.md",
-      "extra-files": [
-        {
-          "type": "yaml",
-          "path": "Chart.yaml",
-          "jsonpath": "$.appVersion",
-          "glob": false
-        }
-      ]
+      "changelog-path": "CHANGELOG.md"
     }
   }
 }
