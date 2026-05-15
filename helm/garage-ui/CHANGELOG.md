@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.4.0...garage-ui-chart-v0.4.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* Helm image tag ([#53](https://github.com/Noooste/garage-ui/issues/53)) ([ff46ff6](https://github.com/Noooste/garage-ui/commit/ff46ff623299461abade27478128f7e5ce409557))
+
 ## [0.4.0](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.3.0...garage-ui-chart-v0.4.0) (2026-05-15)
 
 
