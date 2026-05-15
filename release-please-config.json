@@ -9,10 +9,7 @@
       "component": "garage-ui",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
-      "exclude-paths": ["helm/garage-ui"],
-      "extra-files": [
-        "helm/garage-ui/Chart.yaml"
-      ]
+      "exclude-paths": ["helm/garage-ui"]
     },
     "helm/garage-ui": {
       "release-type": "helm",

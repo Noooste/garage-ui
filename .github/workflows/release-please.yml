@@ -19,8 +19,39 @@ jobs:
           app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
 
-      - uses: googleapis/release-please-action@v4
+      - id: rp
+        uses: googleapis/release-please-action@v4
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           token: ${{ steps.app-token.outputs.token }}
+
+      - name: Sync Chart.yaml appVersion
+        if: ${{ steps.rp.outputs.prs_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PRS: ${{ steps.rp.outputs.prs }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "$PRS" | jq -c '.[]' | while read -r pr; do
+            branch=$(echo "$pr" | jq -r '.headBranchName')
+            workdir=$(mktemp -d)
+            git clone --branch "$branch" --depth 1 \
+              "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$workdir"
+            cd "$workdir"
+            git config user.email "garage-ui-release-bot[bot]@users.noreply.github.com"
+            git config user.name "garage-ui-release-bot[bot]"
+
+            version=$(jq -r '."."' .release-please-manifest.json)
+            target="v${version}"
+            sed -i -E "s|^appVersion:.*|appVersion: ${target}|" helm/garage-ui/Chart.yaml
+
+            if ! git diff --quiet helm/garage-ui/Chart.yaml; then
+              git add helm/garage-ui/Chart.yaml
+              git commit -m "chore: sync Chart.yaml appVersion to ${target}"
+              git push origin "$branch"
+            fi
+            cd -
+            rm -rf "$workdir"
+          done
