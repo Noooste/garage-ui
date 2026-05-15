@@ -9,6 +9,7 @@
       "component": "garage-ui",
       "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
+      "exclude-paths": ["helm/garage-ui"],
       "extra-files": [
         {
           "type": "yaml",
