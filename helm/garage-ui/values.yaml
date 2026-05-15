@@ -12,6 +12,8 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+extraEnvs: []
+
 config:
   server:
     host: "0.0.0.0"

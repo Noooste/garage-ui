@@ -81,6 +81,9 @@ spec:
               key: admin-password
               {{- end }}
         {{- end }}
+        {{- if .Values.extraEnvs }}
+        {{- toYaml .Values.extraEnvs | nindent 8 }}
+        {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
           httpGet:
