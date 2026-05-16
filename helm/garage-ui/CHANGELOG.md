@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.4.2...garage-ui-chart-v0.5.0) (2026-05-16)
+
+
+### Features
+
+* **helm:** add support for extra Kubernetes manifests in values.yaml ([699f11a](https://github.com/Noooste/garage-ui/commit/699f11afaa340fdd8d1c24bda073ffcc94fe86d8))
+
 ## [0.4.2](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.4.1...garage-ui-chart-v0.4.2) (2026-05-15)
 
 
