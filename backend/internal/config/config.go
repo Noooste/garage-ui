@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
+
+	"Noooste/garage-ui/pkg/logger"
 )
 
 // Config represents the application configuration
@@ -188,6 +190,13 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	// Env vars override config file values
 	bindEnvVars()
 
+	// Resolve `_FILE`-suffixed env vars for sensitive values (e.g.
+	// {ENV}_FILE=/run/secrets/foo). Must run after bindEnvVars so the
+	// warning about both forms being set fires correctly.
+	if err := applyFileBackedEnvVars(); err != nil {
+		return nil, fmt.Errorf("error resolving _FILE env vars: %w", err)
+	}
+
 	// Read the config file (optional - will use defaults and env vars if not found)
 	if _, err := os.Stat(configPath); err == nil {
 		if err := viper.ReadInConfig(); err != nil {
@@ -274,6 +283,50 @@ func bindEnvVars() {
 	// Logging config
 	viper.BindEnv("logging.level", "GARAGE_UI_LOGGING_LEVEL")
 	viper.BindEnv("logging.format", "GARAGE_UI_LOGGING_FORMAT")
+}
+
+// fileBackedEnvVars maps env var names to viper config keys for variables that
+// support the `_FILE` suffix convention. Operators may set `{ENV}_FILE` to a
+// file path; the file's contents (with trailing whitespace trimmed) become the
+// effective value. This pattern is used by Docker Official Images (postgres,
+// mysql) to inject secrets via mounted files instead of plain env vars,
+// avoiding exposure through `docker inspect`, process listings, or crash logs.
+//
+// Scope is intentionally limited to values that an operator would reasonably
+// store in a Kubernetes Secret or Docker secret. Non-sensitive config (host,
+// port, endpoints, etc.) is excluded.
+var fileBackedEnvVars = map[string]string{
+	"GARAGE_UI_GARAGE_ADMIN_TOKEN":      "garage.admin_token",
+	"GARAGE_UI_AUTH_ADMIN_USERNAME":     "auth.admin.username",
+	"GARAGE_UI_AUTH_ADMIN_PASSWORD":     "auth.admin.password",
+	"GARAGE_UI_AUTH_JWT_PRIVATE_KEY":    "auth.jwt_private_key",
+	"GARAGE_UI_AUTH_OIDC_CLIENT_ID":     "auth.oidc.client_id",
+	"GARAGE_UI_AUTH_OIDC_CLIENT_SECRET": "auth.oidc.client_secret",
+}
+
+// applyFileBackedEnvVars resolves `_FILE`-suffixed env vars listed in
+// fileBackedEnvVars. For each entry where `{ENV}_FILE` is set, the file is
+// read and its contents (trimmed of trailing CR/LF) become the value via
+// viper.Set, which is the highest-priority source — so a `_FILE` value wins
+// over both `{ENV}` and YAML. A missing or unreadable file is a hard error.
+func applyFileBackedEnvVars() error {
+	for envVar, configKey := range fileBackedEnvVars {
+		path := os.Getenv(envVar + "_FILE")
+		if path == "" {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading %s_FILE (%s): %w", envVar, path, err)
+		}
+		if os.Getenv(envVar) != "" {
+			logger.Warn().
+				Str("env", envVar).
+				Msg("both VAR and VAR_FILE are set; VAR_FILE takes precedence")
+		}
+		viper.Set(configKey, strings.TrimRight(string(data), "\r\n"))
+	}
+	return nil
 }
 
 // Validate checks if the configuration is valid

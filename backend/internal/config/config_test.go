@@ -551,6 +551,115 @@ func TestEffectiveAdminRoles(t *testing.T) {
 	}
 }
 
+// writeSecretFile is a test helper that writes content to a temp file and
+// returns the absolute path. Uses t.TempDir so cleanup is automatic.
+func writeSecretFile(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write temp secret: %v", err)
+	}
+	return path
+}
+
+func TestApplyFileBackedEnvVars(t *testing.T) {
+	tests := []struct {
+		name           string
+		envVar         string
+		configKey      string
+		fileBody       string
+		alsoSetEnv     string
+		useMissingFile bool
+		wantValue      string
+		wantErr        bool
+	}{
+		{
+			name:      "reads value from file",
+			envVar:    "GARAGE_UI_AUTH_ADMIN_PASSWORD",
+			configKey: "auth.admin.password",
+			fileBody:  "s3cret",
+			wantValue: "s3cret",
+		},
+		{
+			name:      "trims trailing newline",
+			envVar:    "GARAGE_UI_GARAGE_ADMIN_TOKEN",
+			configKey: "garage.admin_token",
+			fileBody:  "tok\n",
+			wantValue: "tok",
+		},
+		{
+			name:      "trims trailing CRLF",
+			envVar:    "GARAGE_UI_AUTH_OIDC_CLIENT_SECRET",
+			configKey: "auth.oidc.client_secret",
+			fileBody:  "secret\r\n",
+			wantValue: "secret",
+		},
+		{
+			name:       "_FILE wins over plain env var",
+			envVar:     "GARAGE_UI_AUTH_ADMIN_USERNAME",
+			configKey:  "auth.admin.username",
+			fileBody:   "from-file",
+			alsoSetEnv: "from-env",
+			wantValue:  "from-file",
+		},
+		{
+			name:           "missing file returns error",
+			envVar:         "GARAGE_UI_AUTH_JWT_PRIVATE_KEY",
+			configKey:      "auth.jwt_private_key",
+			useMissingFile: true,
+			wantErr:        true,
+		},
+		{
+			name:      "multiline PEM preserved internally, only trailing whitespace trimmed",
+			envVar:    "GARAGE_UI_AUTH_JWT_PRIVATE_KEY",
+			configKey: "auth.jwt_private_key",
+			fileBody:  "-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----\n",
+			wantValue: "-----BEGIN PRIVATE KEY-----\nABC\n-----END PRIVATE KEY-----",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetViper(t)
+
+			if tc.useMissingFile {
+				t.Setenv(tc.envVar+"_FILE", filepath.Join(t.TempDir(), "does-not-exist"))
+			} else {
+				path := writeSecretFile(t, tc.fileBody)
+				t.Setenv(tc.envVar+"_FILE", path)
+			}
+			if tc.alsoSetEnv != "" {
+				t.Setenv(tc.envVar, tc.alsoSetEnv)
+			}
+
+			err := applyFileBackedEnvVars()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := viper.GetString(tc.configKey); got != tc.wantValue {
+				t.Fatalf("viper.GetString(%q) = %q, want %q", tc.configKey, got, tc.wantValue)
+			}
+		})
+	}
+}
+
+func TestApplyFileBackedEnvVars_NoFileEnvSet_NoOp(t *testing.T) {
+	resetViper(t)
+	if err := applyFileBackedEnvVars(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := viper.GetString("auth.admin.password"); got != "" {
+		t.Fatalf("expected empty password, got %q", got)
+	}
+}
+
 func TestIsProduction(t *testing.T) {
 	tests := []struct {
 		env  string
