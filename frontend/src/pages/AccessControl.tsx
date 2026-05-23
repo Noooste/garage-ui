@@ -27,7 +27,9 @@ import {Tabs, TabsContent} from '@/components/ui/tabs';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Select, SelectOption} from '@/components/ui/select';
+import {useQueryClient} from '@tanstack/react-query';
 import {accessApi, bucketsApi} from '@/lib/api';
+import {queryKeys} from '@/lib/query-client';
 import {formatDate} from '@/lib/utils';
 import type {AccessKey, Bucket, BucketPermission} from '@/types';
 import {AlertTriangle, Calendar, Check, Copy, Database, Edit, Eye, EyeOff, Key, KeyRound, Loader2, MoreVertical, Plus, Search, ShieldCheck, ShieldX, Trash2,} from 'lucide-react';
@@ -107,6 +109,7 @@ function CredentialField({
 }
 
 export function AccessControl() {
+  const queryClient = useQueryClient();
   const [keys, setKeys] = useState<AccessKey[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -209,6 +212,10 @@ export function AccessControl() {
       // Refresh keys list
       const data = await accessApi.listKeys();
       setKeys(data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
+      if (createGrantPermissions && createSelectedBucket) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.buckets.detail(createSelectedBucket) });
+      }
       toast.success(`API Key "${newKeyName}" created successfully`);
     } catch (error) {
       // Error toast is handled by API interceptor
@@ -257,6 +264,8 @@ export function AccessControl() {
       // Refresh keys list
       const data = await accessApi.listKeys();
       setKeys(data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
       toast.success(`API Key "${keyName}" deleted successfully`);
     } catch (error) {
       // Error toast is handled by API interceptor
@@ -302,6 +311,7 @@ export function AccessControl() {
       // Refresh keys list
       const data = await accessApi.listKeys();
       setKeys(data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
 
       setSettingsDialogOpen(false);
       toast.success(`Key settings updated successfully`);
@@ -404,6 +414,8 @@ export function AccessControl() {
       // Refresh keys list to update permissions
       const data = await accessApi.listKeys();
       setKeys(data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.detail(selectedBucket) });
     } catch (error) {
       // Error toast is handled by API interceptor
       console.error('Grant permission error:', error);
