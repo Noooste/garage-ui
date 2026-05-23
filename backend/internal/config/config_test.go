@@ -660,6 +660,20 @@ func TestApplyFileBackedEnvVars_NoFileEnvSet_NoOp(t *testing.T) {
 	}
 }
 
+func TestLoad_FileBackedEnvVarMissingFileReturnsError(t *testing.T) {
+	resetViper(t)
+	yamlPath := writeConfigFile(t, minimalValidYAML)
+	t.Setenv("GARAGE_UI_GARAGE_ADMIN_TOKEN_FILE", filepath.Join(t.TempDir(), "does-not-exist"))
+
+	_, err := Load(yamlPath)
+	if err == nil {
+		t.Fatal("expected error from Load when _FILE points at a missing file, got nil")
+	}
+	if !strings.Contains(err.Error(), "error resolving _FILE env vars") {
+		t.Errorf("error %q does not contain wrapped prefix from Load", err)
+	}
+}
+
 func TestIsProduction(t *testing.T) {
 	tests := []struct {
 		env  string
