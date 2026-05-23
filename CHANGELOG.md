@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/Noooste/garage-ui/compare/v0.6.2...v0.7.0) (2026-05-23)
+
+
+### Features
+
+* **backend,frontend:** enable quotas support in bucket settings ([#64](https://github.com/Noooste/garage-ui/issues/64)) ([1f16edd](https://github.com/Noooste/garage-ui/commit/1f16edd39cfa2f3a51cb576871642c9d23545781))
+* **backend:** Support _FILE suffix on sensitive env variables ([#63](https://github.com/Noooste/garage-ui/issues/63)) ([36ec8e8](https://github.com/Noooste/garage-ui/commit/36ec8e800ea0ff5306e4d0f9f4aea4f72a5a109b))
+
+
+### Bug Fixes
+
+* **auth:** remove auto-enable token auth logic ([1b645b0](https://github.com/Noooste/garage-ui/commit/1b645b0c2c6e05dea98a7fc5d7595ca015913770))
+
 ## [0.6.2](https://github.com/Noooste/garage-ui/compare/v0.6.1...v0.6.2) (2026-05-15)
 
 
