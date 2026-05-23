@@ -47,6 +47,7 @@ type BucketInfo struct {
 	Region        string               `json:"region,omitempty"`
 	WebsiteAccess bool                 `json:"websiteAccess"`
 	WebsiteConfig *BucketWebsiteConfig `json:"websiteConfig,omitempty"`
+	Quotas        *BucketQuotas        `json:"quotas,omitempty"`
 }
 
 // BucketListResponse represents a list of buckets

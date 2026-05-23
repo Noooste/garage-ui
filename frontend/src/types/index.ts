@@ -1,4 +1,9 @@
 // Bucket types
+export interface BucketQuotas {
+  maxSize?: number;
+  maxObjects?: number;
+}
+
 export interface Bucket {
   name: string;
   creationDate: string;
@@ -10,6 +15,7 @@ export interface Bucket {
     indexDocument: string;
     errorDocument?: string;
   };
+  quotas?: BucketQuotas | null;
 }
 
 export interface BucketDetails extends Bucket {

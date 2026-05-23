@@ -63,6 +63,27 @@ export function useGrantBucketPermission() {
   });
 }
 
+export function useUpdateBucketQuotas() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      bucketName,
+      maxSize,
+      maxObjects,
+    }: {
+      bucketName: string;
+      maxSize: number | null;
+      maxObjects: number | null;
+    }) => bucketsApi.updateBucketQuotas(bucketName, { maxSize, maxObjects }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.detail(variables.bucketName) });
+      toast.success('Quotas updated successfully');
+    },
+  });
+}
+
 
 export function useObjects(bucket: string, prefix?: string, enabled = true) {
   return useQuery({

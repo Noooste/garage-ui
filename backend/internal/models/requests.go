@@ -29,3 +29,11 @@ type UpdateBucketWebsiteRequest struct {
 	IndexDocument string `json:"indexDocument,omitempty"`
 	ErrorDocument string `json:"errorDocument,omitempty"`
 }
+
+// UpdateBucketQuotasRequest represents a request to update bucket quota settings.
+// A nil field means "clear this quota" (unlimited). A non-nil field must be > 0;
+// Garage rejects 0.
+type UpdateBucketQuotasRequest struct {
+	MaxSize    *int64 `json:"maxSize,omitempty"`
+	MaxObjects *int64 `json:"maxObjects,omitempty"`
+}

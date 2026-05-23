@@ -20,7 +20,7 @@ const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
         />
         <div
           className={cn(
-            'relative h-6 w-11 rounded-full border transition-colors',
+            'relative h-6 w-11 rounded-full border-2 transition-colors',
             checked ? 'border-[#ff9329] bg-[#ff9329]' : 'border-[#6b7280] bg-[#6b7280]',
             'peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background',
             'peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
@@ -28,8 +28,10 @@ const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
           )}
         >
           <span
-            className="absolute left-[2px] h-5 w-5 rounded-full bg-white shadow transition-transform"
-            style={{ top: '50%', transform: `translateY(-50%) translateX(${checked ? '20px' : '0px'})` }}
+            className={cn(
+              'absolute top-0 left-0 h-5 w-5 rounded-full bg-white shadow transition-transform',
+              checked ? 'translate-x-full' : 'translate-x-0'
+            )}
           />
         </div>
       </label>

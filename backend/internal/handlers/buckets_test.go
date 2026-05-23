@@ -29,6 +29,7 @@ func newBucketsTestApp(t *testing.T) (*fiber.App, *mocks.AdminMock) {
 	app.Delete("/buckets/:name", h.DeleteBucket)
 	app.Post("/buckets/:name/permissions", h.GrantBucketPermission)
 	app.Put("/buckets/:name/website", h.UpdateBucketWebsite)
+	app.Put("/buckets/:name/quotas", h.UpdateBucketQuotas)
 	return app, admin
 }
 
@@ -424,5 +425,198 @@ func TestUpdateBucketWebsite_Disable(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_SetBoth(t *testing.T) {
+	app, admin := newBucketsTestApp(t)
+	admin.GetBucketInfoByAliasFn = func(_ context.Context, _ string) (*models.GarageBucketInfo, error) {
+		return &models.GarageBucketInfo{ID: "id-1"}, nil
+	}
+	admin.UpdateBucketFn = func(_ context.Context, id string, req models.UpdateBucketRequest) (*models.GarageBucketInfo, error) {
+		if req.Quotas == nil {
+			t.Fatalf("Quotas = nil, want non-nil")
+		}
+		if req.Quotas.MaxSize == nil || *req.Quotas.MaxSize != 53687091200 {
+			t.Errorf("MaxSize = %v, want 53687091200", req.Quotas.MaxSize)
+		}
+		if req.Quotas.MaxObjects == nil || *req.Quotas.MaxObjects != 10000 {
+			t.Errorf("MaxObjects = %v, want 10000", req.Quotas.MaxObjects)
+		}
+		return &models.GarageBucketInfo{ID: id, Quotas: req.Quotas}, nil
+	}
+
+	maxSize := int64(53687091200)
+	maxObjects := int64(10000)
+	body, _ := json.Marshal(models.UpdateBucketQuotasRequest{MaxSize: &maxSize, MaxObjects: &maxObjects})
+	req := httptest.NewRequest(http.MethodPut, "/buckets/alpha/quotas", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_SetOnlyMaxSize(t *testing.T) {
+	app, admin := newBucketsTestApp(t)
+	admin.GetBucketInfoByAliasFn = func(_ context.Context, _ string) (*models.GarageBucketInfo, error) {
+		return &models.GarageBucketInfo{ID: "id-1"}, nil
+	}
+	admin.UpdateBucketFn = func(_ context.Context, id string, req models.UpdateBucketRequest) (*models.GarageBucketInfo, error) {
+		if req.Quotas == nil {
+			t.Fatalf("Quotas = nil, want non-nil")
+		}
+		if req.Quotas.MaxSize == nil || *req.Quotas.MaxSize != 1024 {
+			t.Errorf("MaxSize = %v, want 1024", req.Quotas.MaxSize)
+		}
+		if req.Quotas.MaxObjects != nil {
+			t.Errorf("MaxObjects = %v, want nil", req.Quotas.MaxObjects)
+		}
+		return &models.GarageBucketInfo{ID: id, Quotas: req.Quotas}, nil
+	}
+
+	maxSize := int64(1024)
+	body, _ := json.Marshal(models.UpdateBucketQuotasRequest{MaxSize: &maxSize})
+	req := httptest.NewRequest(http.MethodPut, "/buckets/alpha/quotas", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_SetOnlyMaxObjects(t *testing.T) {
+	app, admin := newBucketsTestApp(t)
+	admin.GetBucketInfoByAliasFn = func(_ context.Context, _ string) (*models.GarageBucketInfo, error) {
+		return &models.GarageBucketInfo{ID: "id-1"}, nil
+	}
+	admin.UpdateBucketFn = func(_ context.Context, id string, req models.UpdateBucketRequest) (*models.GarageBucketInfo, error) {
+		if req.Quotas == nil {
+			t.Fatalf("Quotas = nil, want non-nil")
+		}
+		if req.Quotas.MaxObjects == nil || *req.Quotas.MaxObjects != 500 {
+			t.Errorf("MaxObjects = %v, want 500", req.Quotas.MaxObjects)
+		}
+		if req.Quotas.MaxSize != nil {
+			t.Errorf("MaxSize = %v, want nil", req.Quotas.MaxSize)
+		}
+		return &models.GarageBucketInfo{ID: id, Quotas: req.Quotas}, nil
+	}
+
+	maxObjects := int64(500)
+	body, _ := json.Marshal(models.UpdateBucketQuotasRequest{MaxObjects: &maxObjects})
+	req := httptest.NewRequest(http.MethodPut, "/buckets/alpha/quotas", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_ClearBoth(t *testing.T) {
+	app, admin := newBucketsTestApp(t)
+	admin.GetBucketInfoByAliasFn = func(_ context.Context, _ string) (*models.GarageBucketInfo, error) {
+		return &models.GarageBucketInfo{ID: "id-1"}, nil
+	}
+	admin.UpdateBucketFn = func(_ context.Context, id string, req models.UpdateBucketRequest) (*models.GarageBucketInfo, error) {
+		if req.Quotas == nil {
+			t.Fatalf("Quotas = nil, want non-nil (envelope must be present so service clears both)")
+		}
+		if req.Quotas.MaxSize != nil {
+			t.Errorf("MaxSize = %v, want nil", req.Quotas.MaxSize)
+		}
+		if req.Quotas.MaxObjects != nil {
+			t.Errorf("MaxObjects = %v, want nil", req.Quotas.MaxObjects)
+		}
+		return &models.GarageBucketInfo{ID: id}, nil
+	}
+
+	body, _ := json.Marshal(models.UpdateBucketQuotasRequest{})
+	req := httptest.NewRequest(http.MethodPut, "/buckets/alpha/quotas", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_RejectsZeroMaxSize(t *testing.T) {
+	app, _ := newBucketsTestApp(t)
+	zero := int64(0)
+	body, _ := json.Marshal(models.UpdateBucketQuotasRequest{MaxSize: &zero})
+	req := httptest.NewRequest(http.MethodPut, "/buckets/alpha/quotas", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_RejectsNegativeMaxObjects(t *testing.T) {
+	app, _ := newBucketsTestApp(t)
+	neg := int64(-1)
+	body, _ := json.Marshal(models.UpdateBucketQuotasRequest{MaxObjects: &neg})
+	req := httptest.NewRequest(http.MethodPut, "/buckets/alpha/quotas", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_NotFound(t *testing.T) {
+	app, admin := newBucketsTestApp(t)
+	admin.GetBucketInfoByAliasFn = func(_ context.Context, _ string) (*models.GarageBucketInfo, error) {
+		return nil, nil
+	}
+	maxSize := int64(1024)
+	body, _ := json.Marshal(models.UpdateBucketQuotasRequest{MaxSize: &maxSize})
+	req := httptest.NewRequest(http.MethodPut, "/buckets/missing/quotas", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestUpdateBucketQuotas_MalformedJSONReturns400(t *testing.T) {
+	app, _ := newBucketsTestApp(t)
+	req := httptest.NewRequest(http.MethodPut, "/buckets/alpha/quotas", bytes.NewReader([]byte("{not json")))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
 	}
 }

@@ -74,6 +74,7 @@ func (h *BucketHandler) ListBuckets(c fiber.Ctx) error {
 			Size:          &detailedInfo.Bytes,
 			WebsiteAccess: detailedInfo.WebsiteAccess,
 			WebsiteConfig: detailedInfo.WebsiteConfig,
+			Quotas:        detailedInfo.Quotas,
 		}
 
 		buckets = append(buckets, bucketInfo)
@@ -414,6 +415,77 @@ func (h *BucketHandler) UpdateBucketWebsite(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update bucket website: "+err.Error()),
+		)
+	}
+
+	return c.JSON(models.SuccessResponse(result))
+}
+
+// UpdateBucketQuotas updates the quota settings for a bucket
+//
+//	@Summary		Update bucket quotas
+//	@Description	Sets or clears the max size (bytes) and max object count quotas for a bucket. A null field clears that quota (unlimited).
+//	@Tags			Buckets
+//	@Accept			json
+//	@Produce		json
+//	@Param			name	path		string												true	"Name of the bucket"
+//	@Param			request	body		models.UpdateBucketQuotasRequest					true	"Quota configuration"
+//	@Success		200		{object}	models.APIResponse{data=models.GarageBucketInfo}	"Quotas updated"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}			"Invalid request"
+//	@Failure		404		{object}	models.APIResponse{error=models.APIError}			"Bucket not found"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}			"Failed to update bucket"
+//	@Router			/api/v1/buckets/{name}/quotas [put]
+func (h *BucketHandler) UpdateBucketQuotas(c fiber.Ctx) error {
+	ctx := c.Context()
+
+	bucketName := c.Params("name")
+	if bucketName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "Bucket name is required"),
+		)
+	}
+
+	var req models.UpdateBucketQuotasRequest
+	if err := c.Bind().JSON(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "Invalid request body: "+err.Error()),
+		)
+	}
+
+	if req.MaxSize != nil && *req.MaxSize <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "maxSize must be greater than 0"),
+		)
+	}
+	if req.MaxObjects != nil && *req.MaxObjects <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "maxObjects must be greater than 0"),
+		)
+	}
+
+	bucketInfo, err := h.adminService.GetBucketInfoByAlias(ctx, bucketName)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to get bucket info: "+err.Error()),
+		)
+	}
+	if bucketInfo == nil {
+		return c.Status(fiber.StatusNotFound).JSON(
+			models.ErrorResponse(models.ErrCodeBucketNotFound, "Bucket does not exist"),
+		)
+	}
+
+	updateReq := models.UpdateBucketRequest{
+		Quotas: &models.BucketQuotas{
+			MaxSize:    req.MaxSize,
+			MaxObjects: req.MaxObjects,
+		},
+	}
+
+	result, err := h.adminService.UpdateBucket(ctx, bucketInfo.ID, updateReq)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to update bucket quotas: "+err.Error()),
 		)
 	}
 

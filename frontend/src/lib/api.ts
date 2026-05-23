@@ -234,6 +234,22 @@ export const bucketsApi = {
     );
     return response.data.data;
   },
+
+  updateBucketQuotas: async (
+    name: string,
+    payload: { maxSize: number | null; maxObjects: number | null }
+  ) => {
+    // Map nulls to undefined so they are omitted from the JSON body —
+    // backend treats a missing field as "clear this quota".
+    const body: { maxSize?: number; maxObjects?: number } = {};
+    if (payload.maxSize !== null) body.maxSize = payload.maxSize;
+    if (payload.maxObjects !== null) body.maxObjects = payload.maxObjects;
+    const response = await api.put<ApiResponse<any>>(
+      `/v1/buckets/${encodeURIComponent(name)}/quotas`,
+      body
+    );
+    return response.data.data;
+  },
 };
 
 // Objects API

@@ -64,6 +64,7 @@ func SetupRoutes(
 		buckets.Delete("/:name", bucketHandler.DeleteBucket)                    // Delete a bucket
 		buckets.Post("/:name/permissions", bucketHandler.GrantBucketPermission) // Grant bucket permissions
 		buckets.Put("/:name/website", bucketHandler.UpdateBucketWebsite)        // Update bucket website configuration
+		buckets.Put("/:name/quotas", bucketHandler.UpdateBucketQuotas)          // Update bucket quotas
 	}
 
 	// Object routes
