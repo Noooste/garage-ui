@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.1](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.5.0...garage-ui-chart-v0.5.1) (2026-05-25)
+
+* **bump AppVersion:** 0.6.2 -> 0.7.0
+
 ## [0.5.0](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.4.2...garage-ui-chart-v0.5.0) (2026-05-16)
 
 
