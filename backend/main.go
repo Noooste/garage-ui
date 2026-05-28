@@ -219,11 +219,12 @@ func main() {
 		addr := cfg.GetAddress()
 		logger.Info().
 			Str("address", addr).
+			Str("network", fiber.NetworkTCP).
 			Str("health_endpoint", fmt.Sprintf("http://%s/health", addr)).
 			Str("api_docs", fmt.Sprintf("http://%s/api/v1/", addr)).
 			Msg("Server starting")
 
-		if err := app.Listen(addr); err != nil {
+		if err := app.Listen(addr, fiber.ListenConfig{ListenerNetwork: fiber.NetworkTCP}); err != nil {
 			logger.Fatal().Err(err).Msg("Failed to start server")
 		}
 	}()
