@@ -127,6 +127,16 @@ garage:
   region: "garage"
 ```
 
+Server bind host is configured by `server.host` (default: `::`). IPv6 literals like `::` and `::1` are supported.
+
+```yaml
+server:
+  host: "::" # IPv6 wildcard (dual-stack-preferred)
+  port: 8080
+```
+
+If your environment needs explicit IPv4-only binding, set `server.host: "0.0.0.0"`.
+
 See [config.example.yaml](config.example.yaml) for all options including authentication, CORS, and logging.
 
 ### Environment Variables

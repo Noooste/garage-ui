@@ -83,6 +83,9 @@ func TestLoad_EnvOnly_MissingFile(t *testing.T) {
 	if cfg.Server.Port != 9090 {
 		t.Errorf("Server.Port = %d, want 9090 (from env)", cfg.Server.Port)
 	}
+	if cfg.Server.Host != "::" {
+		t.Errorf("Server.Host = %q, want :: (default)", cfg.Server.Host)
+	}
 	if cfg.Garage.AdminToken != "env-token" {
 		t.Errorf("Garage.AdminToken = %q, want env-token", cfg.Garage.AdminToken)
 	}
@@ -367,6 +370,8 @@ func TestGetAddress(t *testing.T) {
 	}{
 		{"localhost", 8080, "localhost:8080"},
 		{"0.0.0.0", 80, "0.0.0.0:80"},
+		{"::", 80, "[::]:80"},
+		{"::1", 443, "[::1]:443"},
 		{"", 443, ":443"},
 	}
 	for _, tc := range tests {

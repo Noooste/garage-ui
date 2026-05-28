@@ -69,8 +69,8 @@
           "properties": {
             "host": {
               "type": "string",
-              "description": "Network interface to bind to (0.0.0.0 for all interfaces)",
-              "default": "0.0.0.0"
+              "description": "Network interface to bind to (use :: for IPv6 wildcard / dual-stack-preferred, or 0.0.0.0 for IPv4 wildcard)",
+              "default": "::"
             },
             "port": {
               "type": "integer",

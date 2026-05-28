@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -160,7 +162,7 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	viper.SetConfigType("yaml")
 
 	// Built-in defaults (lowest priority)
-	viper.SetDefault("server.host", "0.0.0.0")
+	viper.SetDefault("server.host", "::")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.environment", "production")
 	viper.SetDefault("garage.force_path_style", true)
@@ -383,7 +385,7 @@ func (c *Config) Validate() error {
 
 // GetAddress returns the full server address (host:port)
 func (c *Config) GetAddress() string {
-	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+	return net.JoinHostPort(c.Server.Host, strconv.Itoa(c.Server.Port))
 }
 
 // IsDevelopment returns true if running in development mode
