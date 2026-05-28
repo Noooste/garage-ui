@@ -48,7 +48,7 @@ RUN addgroup -g 1000 garageui && \
     adduser -D -u 1000 -G garageui garageui
 
 COPY --from=backend-builder --chown=garageui:garageui /app/garage-ui .
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+COPY --from=frontend-builder --chown=garageui:garageui /app/frontend/dist ./frontend/dist
 
 USER garageui
 
@@ -58,4 +58,3 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 CMD ["./garage-ui"]
-
