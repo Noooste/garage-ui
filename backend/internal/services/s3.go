@@ -557,6 +557,44 @@ func (s *S3Service) DeleteMultipleObjects(ctx context.Context, bucketName string
 	return nil
 }
 
+// DeleteObjectsByPrefix recursively deletes every object stored under the given
+// prefix (i.e. a "folder"), including the directory marker itself. It returns
+// the number of objects that were deleted.
+func (s *S3Service) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefix string) (int, error) {
+	if prefix == "" {
+		return 0, fmt.Errorf("prefix is required for recursive delete")
+	}
+
+	// Get bucket-specific MinIO client
+	client, err := s.getMinioClient(ctx, bucketName, OpWrite)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
+	}
+
+	// List every object under the prefix recursively (no delimiter), so nested
+	// folders are flattened into their concrete keys.
+	keys := make([]string, 0)
+	for obj := range client.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: true,
+	}) {
+		if obj.Err != nil {
+			return 0, fmt.Errorf("failed to list objects under prefix %s in bucket %s: %w", prefix, bucketName, obj.Err)
+		}
+		keys = append(keys, obj.Key)
+	}
+
+	if len(keys) == 0 {
+		return 0, nil
+	}
+
+	if err := s.DeleteMultipleObjects(ctx, bucketName, keys); err != nil {
+		return 0, err
+	}
+
+	return len(keys), nil
+}
+
 // GetPresignedURL generates a pre-signed URL for temporary access to an object
 // This is useful for sharing files without exposing credentials
 func (s *S3Service) GetPresignedURL(ctx context.Context, bucketName, key string, expiresIn time.Duration) (string, error) {

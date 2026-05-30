@@ -23,6 +23,7 @@ interface ObjectsTableProps {
   currentPath: string;
   searchQuery: string;
   selectedFileKeys: Set<string>;
+  selectedFolderKeys: Set<string>;
   isDragActive: boolean;
   isLoading?: boolean;
   isTruncated?: boolean;
@@ -30,8 +31,10 @@ interface ObjectsTableProps {
   itemsPerPage: number;
   onNavigateToFolder: (key: string) => void;
   onDeleteObject: (object: S3Object) => void;
+  onDeleteFolder: (object: S3Object) => void;
   onToggleFileSelection: (key: string) => void;
-  onSelectAllFiles: () => void;
+  onToggleFolderSelection: (key: string) => void;
+  onSelectAll: () => void;
   onPageChange: (token?: string) => void;
   onItemsPerPageChange: (count: number) => void;
   initialPageToken?: string;
@@ -47,6 +50,7 @@ export function ObjectsTable({
   currentPath,
   searchQuery,
   selectedFileKeys,
+  selectedFolderKeys,
   isDragActive,
   isLoading = false,
   isTruncated = false,
@@ -54,8 +58,10 @@ export function ObjectsTable({
   itemsPerPage,
   onNavigateToFolder,
   onDeleteObject,
+  onDeleteFolder,
   onToggleFileSelection,
-  onSelectAllFiles,
+  onToggleFolderSelection,
+  onSelectAll,
   onPageChange,
   onItemsPerPageChange,
   initialPageToken,
@@ -184,11 +190,11 @@ export function ObjectsTable({
             <TableHead className="w-[50px]">
               <Checkbox
                 checked={
-                  filteredObjects.filter(obj => !obj.isFolder).length > 0 &&
-                  selectedFileKeys.size === filteredObjects.filter(obj => !obj.isFolder).length
+                  filteredObjects.length > 0 &&
+                  selectedFileKeys.size + selectedFolderKeys.size === filteredObjects.length
                 }
-                onCheckedChange={onSelectAllFiles}
-                aria-label="Select all files"
+                onCheckedChange={onSelectAll}
+                aria-label="Select all objects"
               />
             </TableHead>
           <TableHead
@@ -240,10 +246,9 @@ export function ObjectsTable({
               <TableCell className="w-[50px]">
                 {obj.isFolder ? (
                   <Checkbox
-                    disabled
-                    checked={false}
-                    className="opacity-50 cursor-not-allowed bg-muted"
-                    aria-label="Folders cannot be selected"
+                    checked={selectedFolderKeys.has(obj.key)}
+                    onCheckedChange={() => onToggleFolderSelection(obj.key)}
+                    aria-label={`Select folder ${obj.key} (deletes its contents recursively)`}
                   />
                 ) : (
                   <Checkbox
@@ -341,7 +346,29 @@ export function ObjectsTable({
                 })() : null}
               </TableCell>
               <TableCell>
-                {!obj.isFolder && (
+                {obj.isFolder ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger>
+                      <Button variant="ghost" size="icon" className="-m-6 top-1 relative">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onNavigateToFolder(obj.key)}>
+                        <FolderIcon className="h-4 w-4" />
+                        Open
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => onDeleteFolder(obj)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete folder
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
                   <DropdownMenu>
                     <DropdownMenuTrigger>
                       <Button variant="ghost" size="icon" className="-m-6 top-1 relative">

@@ -349,8 +349,10 @@ export const objectsApi = {
     await api.delete(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}`);
   },
 
-  deleteMultiple: async (bucket: string, keys: string[], prefix?: string): Promise<void> => {
-    const payload = { keys, ...(prefix && { prefix }) };
+  // Deletes the given object keys and/or recursively deletes every object under
+  // each folder prefix in a single request.
+  deleteMultiple: async (bucket: string, keys: string[], prefixes: string[] = []): Promise<void> => {
+    const payload = { keys, ...(prefixes.length > 0 && { prefixes }) };
     await api.post(`/v1/buckets/${bucket}/objects/delete-multiple`, payload);
   },
 

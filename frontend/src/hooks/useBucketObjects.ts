@@ -160,14 +160,24 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
     }
   }, [bucketName, currentContinuationToken, fetchObjects]);
 
-  const deleteMultipleObjects = useCallback(async (keys: string[]) => {
-    if (!bucketName || keys.length === 0) return false;
+  // Deletes the selected object keys and recursively deletes every object under
+  // each selected folder prefix.
+  const deleteMultipleObjects = useCallback(async (keys: string[], prefixes: string[] = []) => {
+    if (!bucketName || (keys.length === 0 && prefixes.length === 0)) return false;
 
     try {
-      setObjects(prev => prev.filter(obj => !keys.includes(obj.key)));
+      const keySet = new Set(keys);
+      setObjects(prev => prev.filter(obj =>
+        !keySet.has(obj.key) && !prefixes.some(prefix => obj.key.startsWith(prefix))
+      ));
 
-      await objectsApi.deleteMultiple(bucketName, keys, currentPath || undefined);
-      toast.success(`Successfully deleted ${keys.length} file${keys.length > 1 ? 's' : ''}`);
+      await objectsApi.deleteMultiple(bucketName, keys, prefixes);
+
+      const fileLabel = keys.length > 0 ? `${keys.length} file${keys.length > 1 ? 's' : ''}` : '';
+      const folderLabel = prefixes.length > 0 ? `${prefixes.length} folder${prefixes.length > 1 ? 's' : ''}` : '';
+      const summary = [fileLabel, folderLabel].filter(Boolean).join(' and ');
+      toast.success(`Successfully deleted ${summary}`);
+
       await fetchObjects(currentContinuationToken, true);
       return true;
     } catch (error) {
@@ -175,7 +185,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
       await fetchObjects(currentContinuationToken, true);
       return false;
     }
-  }, [bucketName, currentPath, currentContinuationToken, fetchObjects]);
+  }, [bucketName, currentContinuationToken, fetchObjects]);
 
   const createDirectory = useCallback(async (dirName: string) => {
     if (!bucketName) return false;

@@ -147,9 +147,10 @@ type PresignedURLResponse struct {
 }
 
 type ObjectDeleteMultipleResponse struct {
-	Bucket  string   `json:"bucket"`
-	Deleted int      `json:"deleted"`
-	Keys    []string `json:"keys"`
+	Bucket   string   `json:"bucket"`
+	Deleted  int      `json:"deleted"`
+	Keys     []string `json:"keys"`
+	Prefixes []string `json:"prefixes,omitempty"`
 }
 
 // UserListResponse represents a list of users/keys

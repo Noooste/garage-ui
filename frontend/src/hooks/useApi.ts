@@ -142,8 +142,8 @@ export function useDeleteMultipleObjects() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ bucket, keys, prefix }: { bucket: string; keys: string[]; prefix?: string }) =>
-      objectsApi.deleteMultiple(bucket, keys, prefix),
+    mutationFn: ({ bucket, keys, prefixes }: { bucket: string; keys: string[]; prefixes?: string[] }) =>
+      objectsApi.deleteMultiple(bucket, keys, prefixes),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.objects.list(variables.bucket) });
       queryClient.invalidateQueries({ queryKey: queryKeys.buckets.detail(variables.bucket) });

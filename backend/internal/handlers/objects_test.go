@@ -545,6 +545,81 @@ func TestDeleteMultipleObjects_Success(t *testing.T) {
 	}
 }
 
+func TestDeleteMultipleObjects_Prefixes_Recursive(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.DeleteObjectsByPrefixFn = func(_ context.Context, bucket, prefix string) (int, error) {
+		if bucket != "b1" || prefix != "docs/" {
+			t.Errorf("args = (%q, %q)", bucket, prefix)
+		}
+		return 4, nil
+	}
+	body, _ := json.Marshal(map[string]any{"prefixes": []string{"docs/"}})
+	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var out struct {
+		Data models.ObjectDeleteMultipleResponse `json:"data"`
+	}
+	decodeJSON(t, resp.Body, &out)
+	if out.Data.Deleted != 4 {
+		t.Errorf("Deleted = %d, want 4", out.Data.Deleted)
+	}
+}
+
+func TestDeleteMultipleObjects_KeysAndPrefixes(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.DeleteMultipleObjectsFn = func(_ context.Context, _ string, keys []string) error {
+		if len(keys) != 2 {
+			t.Errorf("keys = %v", keys)
+		}
+		return nil
+	}
+	s3.DeleteObjectsByPrefixFn = func(_ context.Context, _, _ string) (int, error) { return 3, nil }
+	body, _ := json.Marshal(map[string]any{"keys": []string{"a", "b"}, "prefixes": []string{"docs/"}})
+	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var out struct {
+		Data models.ObjectDeleteMultipleResponse `json:"data"`
+	}
+	decodeJSON(t, resp.Body, &out)
+	if out.Data.Deleted != 5 {
+		t.Errorf("Deleted = %d, want 5 (2 keys + 3 under prefix)", out.Data.Deleted)
+	}
+}
+
+func TestDeleteMultipleObjects_PrefixError500(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.DeleteObjectsByPrefixFn = func(_ context.Context, _, _ string) (int, error) {
+		return 0, errors.New("boom")
+	}
+	body, _ := json.Marshal(map[string]any{"prefixes": []string{"docs/"}})
+	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
 func TestDeleteMultipleObjects_EmptyKeys400(t *testing.T) {
 	app, _ := newObjectsTestApp(t)
 	body, _ := json.Marshal(map[string]any{"keys": []string{}})

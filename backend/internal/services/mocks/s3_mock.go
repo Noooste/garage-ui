@@ -32,6 +32,7 @@ type S3Mock struct {
 	GetObjectMetadataFn    func(ctx context.Context, bucketName, key string) (*models.ObjectInfo, error)
 	GetPresignedURLFn      func(ctx context.Context, bucketName, key string, expiresIn time.Duration) (string, error)
 	DeleteMultipleObjectsFn func(ctx context.Context, bucketName string, keys []string) error
+	DeleteObjectsByPrefixFn func(ctx context.Context, bucketName, prefix string) (int, error)
 	UploadMultipleObjectsFn func(ctx context.Context, bucketName string, files []struct {
 		Key         string
 		Body        io.Reader
@@ -117,6 +118,14 @@ func (m *S3Mock) DeleteMultipleObjects(ctx context.Context, bucketName string, k
 		return s3NotConfigured("DeleteMultipleObjects")
 	}
 	return m.DeleteMultipleObjectsFn(ctx, bucketName, keys)
+}
+
+func (m *S3Mock) DeleteObjectsByPrefix(ctx context.Context, bucketName, prefix string) (int, error) {
+	m.record("DeleteObjectsByPrefix", bucketName, prefix)
+	if m.DeleteObjectsByPrefixFn == nil {
+		return 0, s3NotConfigured("DeleteObjectsByPrefix")
+	}
+	return m.DeleteObjectsByPrefixFn(ctx, bucketName, prefix)
 }
 
 func (m *S3Mock) UploadMultipleObjects(ctx context.Context, bucketName string, files []struct {

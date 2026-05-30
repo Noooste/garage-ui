@@ -5,6 +5,7 @@ import {Input} from '@/components/ui/input';
 import {ObjectsTable} from './ObjectsTable';
 import {CreateDirectoryDialog} from './CreateDirectoryDialog';
 import {DeleteObjectDialog} from './DeleteObjectDialog';
+import {ConfirmDialog} from '@/components/ui/confirm-dialog';
 import {UploadProgress} from './UploadProgress';
 import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, Search, Trash, Upload} from 'lucide-react';
 import {getBreadcrumbs} from '@/lib/file-utils';
@@ -25,7 +26,7 @@ interface ObjectBrowserViewProps {
   onUploadFiles: (files: File[]) => Promise<boolean>;
   uploadTasks: UploadTask[];
   onDeleteObject: (key: string) => Promise<boolean>;
-  onDeleteMultipleObjects: (keys: string[]) => Promise<boolean>;
+  onDeleteMultipleObjects: (keys: string[], prefixes?: string[]) => Promise<boolean>;
   onCreateDirectory: (name: string) => Promise<boolean>;
   onRefresh: () => Promise<void>;
   onPageChange: (token?: string) => void;
@@ -66,6 +67,10 @@ export function ObjectBrowserView({
   const [selectedObject, setSelectedObject] = useState<S3Object | null>(null);
   const [createDirDialogOpen, setCreateDirDialogOpen] = useState(false);
   const [selectedFileKeys, setSelectedFileKeys] = useState<Set<string>>(new Set());
+  const [selectedFolderKeys, setSelectedFolderKeys] = useState<Set<string>>(new Set());
+  // Holds the keys/prefixes awaiting confirmation in the bulk-delete dialog.
+  const [pendingDelete, setPendingDelete] = useState<{ keys: string[]; prefixes: string[] } | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: async (acceptedFiles, _fileRejections, event) => {
@@ -124,33 +129,76 @@ export function ObjectBrowserView({
     });
   };
 
-  const handleToggleFileSelection = (key: string) => {
-    const newSelected = new Set(selectedFileKeys);
-    if (newSelected.has(key)) {
-      newSelected.delete(key);
+  const selectedCount = selectedFileKeys.size + selectedFolderKeys.size;
+
+  const toggleInSet = (set: Set<string>, key: string) => {
+    const next = new Set(set);
+    if (next.has(key)) {
+      next.delete(key);
     } else {
-      newSelected.add(key);
+      next.add(key);
     }
-    setSelectedFileKeys(newSelected);
+    return next;
   };
 
-  const handleSelectAllFiles = () => {
-    const fileKeys = objects
-      .filter(obj => !obj.isFolder)
-      .map(obj => obj.key);
+  const handleToggleFileSelection = (key: string) => {
+    setSelectedFileKeys(prev => toggleInSet(prev, key));
+  };
 
-    if (selectedFileKeys.size === fileKeys.length && fileKeys.length > 0) {
+  const handleToggleFolderSelection = (key: string) => {
+    setSelectedFolderKeys(prev => toggleInSet(prev, key));
+  };
+
+  const handleSelectAll = () => {
+    const fileKeys = objects.filter(obj => !obj.isFolder).map(obj => obj.key);
+    const folderKeys = objects.filter(obj => obj.isFolder).map(obj => obj.key);
+    const allSelected =
+      objects.length > 0 && selectedFileKeys.size + selectedFolderKeys.size === objects.length;
+
+    if (allSelected) {
       setSelectedFileKeys(new Set());
+      setSelectedFolderKeys(new Set());
     } else {
       setSelectedFileKeys(new Set(fileKeys));
+      setSelectedFolderKeys(new Set(folderKeys));
     }
   };
 
-  const handleBulkDeleteFiles = async () => {
-    if (selectedFileKeys.size === 0) return;
+  // Open the confirmation dialog for the current multi-selection.
+  const handleRequestBulkDelete = () => {
+    if (selectedCount === 0) return;
+    setPendingDelete({
+      keys: Array.from(selectedFileKeys),
+      prefixes: Array.from(selectedFolderKeys),
+    });
+  };
 
-    await onDeleteMultipleObjects(Array.from(selectedFileKeys));
-    setSelectedFileKeys(new Set());
+  // Open the confirmation dialog for a single folder (recursive delete).
+  const handleDeleteFolder = (folderKey: string) => {
+    setPendingDelete({ keys: [], prefixes: [folderKey] });
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (!pendingDelete) return;
+
+    setBulkDeleting(true);
+    const success = await onDeleteMultipleObjects(pendingDelete.keys, pendingDelete.prefixes);
+    setBulkDeleting(false);
+
+    if (success) {
+      // Drop the deleted folders/files from the live selection.
+      setSelectedFileKeys(prev => {
+        const next = new Set(prev);
+        pendingDelete.keys.forEach(k => next.delete(k));
+        return next;
+      });
+      setSelectedFolderKeys(prev => {
+        const next = new Set(prev);
+        pendingDelete.prefixes.forEach(k => next.delete(k));
+        return next;
+      });
+      setPendingDelete(null);
+    }
   };
 
   const handleDeleteObject = async (key: string): Promise<boolean> => {
@@ -209,14 +257,14 @@ export function ObjectBrowserView({
             />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {selectedFileKeys.size > 0 && (
+            {selectedCount > 0 && (
               <Button
-                onClick={handleBulkDeleteFiles}
-                title={`Delete ${selectedFileKeys.size} selected file(s)`}
+                onClick={handleRequestBulkDelete}
+                title={`Delete ${selectedCount} selected item(s)`}
                 className="bg-transparent border border-red-500 text-red-500 hover:bg-red-500/5"
               >
                 <Trash className="h-4 w-4" />
-                Delete {selectedFileKeys.size} file{selectedFileKeys.size !== 1 ? 's' : ''}
+                Delete {selectedCount} item{selectedCount !== 1 ? 's' : ''}
               </Button>
             )}
             <Button variant="secondary" onClick={() => setShowUploadZone(!showUploadZone)} className="flex-1 sm:flex-initial">
@@ -353,6 +401,7 @@ export function ObjectBrowserView({
             currentPath={currentPath}
             searchQuery={searchQuery}
             selectedFileKeys={selectedFileKeys}
+            selectedFolderKeys={selectedFolderKeys}
             isDragActive={isDragActive}
             isLoading={isLoading && !isRefreshing && !isNavigating}
             isTruncated={isTruncated}
@@ -363,8 +412,10 @@ export function ObjectBrowserView({
               setSelectedObject(obj);
               setDeleteObjectDialogOpen(true);
             }}
+            onDeleteFolder={(obj) => handleDeleteFolder(obj.key)}
             onToggleFileSelection={handleToggleFileSelection}
-            onSelectAllFiles={handleSelectAllFiles}
+            onToggleFolderSelection={handleToggleFolderSelection}
+            onSelectAll={handleSelectAll}
             onPageChange={onPageChange}
             onItemsPerPageChange={onItemsPerPageChange}
             initialPageToken={initialPageToken}
@@ -388,6 +439,53 @@ export function ObjectBrowserView({
         object={selectedObject}
         onDeleteObject={handleDeleteObject}
       />
+
+      {/* Bulk / Folder Delete Confirmation */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !bulkDeleting) setPendingDelete(null);
+        }}
+        title={getBulkDeleteTitle(pendingDelete)}
+        description={getBulkDeleteDescription(pendingDelete)}
+        confirmLabel="Delete"
+        loading={bulkDeleting}
+        onConfirm={handleConfirmBulkDelete}
+      />
     </div>
   );
+}
+
+// Builds a concise title summarising what the bulk-delete dialog will remove.
+function getBulkDeleteTitle(pending: { keys: string[]; prefixes: string[] } | null): string {
+  if (!pending) return 'Delete items?';
+  const { keys, prefixes } = pending;
+  const total = keys.length + prefixes.length;
+  if (keys.length === 0 && prefixes.length === 1) {
+    return 'Delete folder?';
+  }
+  return `Delete ${total} item${total !== 1 ? 's' : ''}?`;
+}
+
+// Spells out the file/folder counts and warns that folders are removed recursively.
+function getBulkDeleteDescription(
+  pending: { keys: string[]; prefixes: string[] } | null,
+): string {
+  if (!pending) return '';
+  const { keys, prefixes } = pending;
+  const parts: string[] = [];
+  if (keys.length > 0) {
+    parts.push(`${keys.length} file${keys.length !== 1 ? 's' : ''}`);
+  }
+  if (prefixes.length > 0) {
+    parts.push(`${prefixes.length} folder${prefixes.length !== 1 ? 's' : ''}`);
+  }
+  const summary = parts.join(' and ');
+
+  if (prefixes.length > 0) {
+    return `This will permanently delete ${summary}. Every object stored inside the selected folder${
+      prefixes.length !== 1 ? 's' : ''
+    } will be removed recursively.`;
+  }
+  return `This will permanently delete ${summary}.`;
 }
