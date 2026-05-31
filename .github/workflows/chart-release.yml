@@ -8,6 +8,8 @@ on:
 permissions:
   contents: write
   pages: write
+  packages: write
+  id-token: write
 
 jobs:
   release:
@@ -26,7 +28,7 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4.3.1
         with:
-          version: v3.19.3
+          version: v4.1.3
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.7.0
@@ -35,3 +37,36 @@ jobs:
           skip_existing: true
         env:
           CR_TOKEN: ${{ secrets.HELM_RELEASE_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Package and push chart to ghcr.io (OCI)
+        id: oci_push
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          chart_version=$(grep -E '^version:' helm/garage-ui/Chart.yaml | awk '{print $2}')
+          echo "Packaging chart version ${chart_version}"
+          helm package helm/garage-ui --destination /tmp/chart
+
+          echo "${GHCR_TOKEN}" | helm registry login ghcr.io \
+            --username "${GHCR_USER}" --password-stdin
+
+          push_output=$(helm push "/tmp/chart/garage-ui-${chart_version}.tgz" \
+            oci://ghcr.io/noooste/charts 2>&1 | tee /dev/stderr)
+
+          digest=$(echo "$push_output" | grep -oE 'sha256:[a-f0-9]{64}' | head -n1)
+          if [ -z "$digest" ]; then
+            echo "Failed to parse pushed digest from helm push output" >&2
+            exit 1
+          fi
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Pushed oci://ghcr.io/noooste/charts/garage-ui:${chart_version} (${digest})"
+
+      - name: Sign chart with cosign (keyless)
+        run: |
+          cosign sign --yes \
+            "ghcr.io/noooste/charts/garage-ui@${{ steps.oci_push.outputs.digest }}"
