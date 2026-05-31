@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/Noooste/garage-ui/compare/v0.8.0...v0.8.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **frontend:** align three-dot menu item icon spacing and text alignment ([#72](https://github.com/Noooste/garage-ui/issues/72)) ([45f8770](https://github.com/Noooste/garage-ui/commit/45f87707996e92d0f8f75e79c8f60a13556eaf6e))
+
 ## [0.8.0](https://github.com/Noooste/garage-ui/compare/v0.7.0...v0.8.0) (2026-05-31)
 
 
