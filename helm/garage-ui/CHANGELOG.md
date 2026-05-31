@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.5.0...garage-ui-chart-v0.6.0) (2026-05-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* **backend,helm:** bind to IPv6 wildcard by default for dual-stack support
+
+### Features
+
+* **backend,helm:** bind to IPv6 wildcard by default for dual-stack support ([5427758](https://github.com/Noooste/garage-ui/commit/5427758eaadc4fa1327402b958b7e7e1f43aecdd))
+
 ## [0.5.1](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.5.0...garage-ui-chart-v0.5.1) (2026-05-25)
 
 * **bump AppVersion:** 0.6.2 -> 0.7.0

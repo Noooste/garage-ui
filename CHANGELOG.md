@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/Noooste/garage-ui/compare/v0.7.0...v0.8.0) (2026-05-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* **backend,helm:** bind to IPv6 wildcard by default for dual-stack support
+
+### Features
+
+* **backend,helm:** bind to IPv6 wildcard by default for dual-stack support ([5427758](https://github.com/Noooste/garage-ui/commit/5427758eaadc4fa1327402b958b7e7e1f43aecdd))
+* **docs:** add documentation generation command to Makefile ([186af18](https://github.com/Noooste/garage-ui/commit/186af18d54f739bd9b467cbf3ab9ccc2e92ddf62))
+
 ## [0.7.0](https://github.com/Noooste/garage-ui/compare/v0.6.2...v0.7.0) (2026-05-23)
 
 
