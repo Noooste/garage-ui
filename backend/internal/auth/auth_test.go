@@ -564,8 +564,11 @@ func TestExtractRolesFromAccessToken_IntermediateNodeNotMap(t *testing.T) {
 	}
 }
 
-func TestExtractRolesFromAccessToken_FinalValueWrongType(t *testing.T) {
-	// Final value is a plain string, not an array — extractStringArray returns nil.
+func TestExtractRolesFromAccessToken_ScalarStringRoleReturnsSingleElement(t *testing.T) {
+	// A role_attribute_path that resolves to a scalar string (common when an IdP
+	// emits a single role, e.g. "garage_role": "garage-ui-admin") must be treated
+	// as a one-element role list, not silently discarded. Discarding it caused
+	// admin_role (singular) + scalar claim to yield roles=[] and a spurious 403.
 	tok := makeAccessToken(t, map[string]any{
 		"roles": "admin",
 	})
@@ -574,8 +577,25 @@ func TestExtractRolesFromAccessToken_FinalValueWrongType(t *testing.T) {
 			OIDC: config.OIDCConfig{RoleAttributePath: "roles"},
 		},
 	}
+	got := svc.ExtractRolesFromAccessToken(tok)
+	if len(got) != 1 || got[0] != "admin" {
+		t.Errorf("got %v, want [admin]", got)
+	}
+}
+
+func TestExtractRolesFromAccessToken_EmptyScalarStringReturnsNil(t *testing.T) {
+	// An empty scalar must not produce a [""] role, which would never match a
+	// configured admin role and only muddies logs.
+	tok := makeAccessToken(t, map[string]any{
+		"roles": "",
+	})
+	svc := &Service{
+		authConfig: &config.AuthConfig{
+			OIDC: config.OIDCConfig{RoleAttributePath: "roles"},
+		},
+	}
 	if got := svc.ExtractRolesFromAccessToken(tok); got != nil {
-		t.Errorf("expected nil for non-array roles, got %v", got)
+		t.Errorf("expected nil for empty scalar role, got %v", got)
 	}
 }
 

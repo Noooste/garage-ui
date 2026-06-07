@@ -168,6 +168,10 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	viper.SetDefault("garage.force_path_style", true)
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "text")
+	viper.SetDefault("auth.oidc.cookie_name", "garage_session")
+	viper.SetDefault("auth.oidc.cookie_http_only", true)
+	viper.SetDefault("auth.oidc.cookie_same_site", "lax")
+	viper.SetDefault("auth.oidc.session_max_age", 86400)
 
 	// If garage.toml path is provided, parse it and set values as viper
 	// defaults. Defaults sit below config-file and env-var values in viper's

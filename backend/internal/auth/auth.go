@@ -322,8 +322,21 @@ func extractRoles(claims map[string]interface{}, path string) []string {
 	return nil
 }
 
-// extractStringArray converts an interface{} to []string if possible
+// extractStringArray converts an interface{} to []string if possible.
+//
+// A scalar string is treated as a single-element list: IdPs commonly emit a
+// single role as a bare string (e.g. "garage_role": "garage-ui-admin") rather
+// than a one-element array, and discarding it would make admin_role checks
+// fail with a spurious 403, see https://github.com/Noooste/garage-ui/issues/75
 func extractStringArray(value interface{}) []string {
+	// Try a scalar string (single role emitted as a bare value)
+	if str, ok := value.(string); ok {
+		if str == "" {
+			return nil
+		}
+		return []string{str}
+	}
+
 	// Try direct string array
 	if strArray, ok := value.([]string); ok {
 		return strArray

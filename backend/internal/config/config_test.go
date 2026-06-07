@@ -490,6 +490,103 @@ func TestLoad_EnvOverridesToml(t *testing.T) {
 	}
 }
 
+// oidcValidYAML is a minimal configuration that enables OIDC and passes
+// Validate, but deliberately omits auth.oidc.cookie_name.
+const oidcValidYAML = `
+server:
+  host: "0.0.0.0"
+  port: 8080
+  root_url: "https://garage.example.com"
+garage:
+  endpoint: http://garage:3900
+  admin_endpoint: http://garage:3903
+  admin_token: supersecret
+auth:
+  oidc:
+    enabled: true
+    client_id: "garage-ui"
+    issuer_url: "https://idp.example.com/realms/main"
+    scopes:
+      - openid
+    admin_roles:
+      - "garage-ui-admin"
+`
+
+func TestLoad_OIDCCookieNameDefaultsWhenUnset(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, oidcValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	// An empty cookie name makes Fiber silently drop the session Set-Cookie
+	// (net/http rejects empty cookie names), which manifests as an OIDC login
+	// loop. A non-empty default prevents that footgun.
+	if cfg.Auth.OIDC.CookieName != "garage_session" {
+		t.Errorf("CookieName = %q, want garage_session (default)", cfg.Auth.OIDC.CookieName)
+	}
+}
+
+func TestLoad_OIDCCookieNameExplicitValueWins(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, oidcValidYAML+"    cookie_name: \"custom_session\"\n")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.OIDC.CookieName != "custom_session" {
+		t.Errorf("CookieName = %q, want custom_session (explicit override)", cfg.Auth.OIDC.CookieName)
+	}
+}
+
+func TestLoad_OIDCCookieDefaultsWhenUnset(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, oidcValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	// HTTPOnly must default to true: a session cookie readable from JavaScript
+	// is an XSS token-theft risk.
+	if !cfg.Auth.OIDC.CookieHTTPOnly {
+		t.Errorf("CookieHTTPOnly = false, want true (default)")
+	}
+	// SessionMaxAge must default to a positive value so the cookie's MaxAge
+	// agrees with the 24h JWT instead of becoming a session-only cookie.
+	if cfg.Auth.OIDC.SessionMaxAge != 86400 {
+		t.Errorf("SessionMaxAge = %d, want 86400 (default)", cfg.Auth.OIDC.SessionMaxAge)
+	}
+	if cfg.Auth.OIDC.CookieSameSite != "lax" {
+		t.Errorf("CookieSameSite = %q, want lax (default)", cfg.Auth.OIDC.CookieSameSite)
+	}
+}
+
+func TestLoad_OIDCCookieDefaultsCanBeOverridden(t *testing.T) {
+	resetViper(t)
+	yaml := oidcValidYAML +
+		"    cookie_http_only: false\n" +
+		"    session_max_age: 3600\n" +
+		"    cookie_same_site: \"strict\"\n"
+	path := writeConfigFile(t, yaml)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.OIDC.CookieHTTPOnly {
+		t.Errorf("CookieHTTPOnly = true, want false (explicit override)")
+	}
+	if cfg.Auth.OIDC.SessionMaxAge != 3600 {
+		t.Errorf("SessionMaxAge = %d, want 3600 (explicit override)", cfg.Auth.OIDC.SessionMaxAge)
+	}
+	if cfg.Auth.OIDC.CookieSameSite != "strict" {
+		t.Errorf("CookieSameSite = %q, want strict (explicit override)", cfg.Auth.OIDC.CookieSameSite)
+	}
+}
+
 func TestEffectiveAdminRoles(t *testing.T) {
 	tests := []struct {
 		name       string
