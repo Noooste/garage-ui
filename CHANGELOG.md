@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/Noooste/garage-ui/compare/v0.8.1...v0.8.2) (2026-06-07)
+
+
+### Bug Fixes
+
+* **backend:** prevent OIDC login loop from empty cookie name ([#76](https://github.com/Noooste/garage-ui/issues/76)) ([22be89b](https://github.com/Noooste/garage-ui/commit/22be89b2ff86465abb90dab0344ef9366ab181b3))
+
 ## [0.8.1](https://github.com/Noooste/garage-ui/compare/v0.8.0...v0.8.1) (2026-05-31)
 
 
