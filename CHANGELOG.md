@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/Noooste/garage-ui/compare/v0.8.2...v0.8.3) (2026-06-21)
+
+
+### Bug Fixes
+
+* **backend:** improve API version detection with retry logic for health probes ([46aa375](https://github.com/Noooste/garage-ui/commit/46aa3752c81788787388d1c67e29cef786bdabff))
+
 ## [0.8.2](https://github.com/Noooste/garage-ui/compare/v0.8.1...v0.8.2) (2026-06-07)
 
 

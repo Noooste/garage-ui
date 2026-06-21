@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.6.1...garage-ui-chart-v0.6.2) (2026-06-21)
+
+
+### Bug Fixes
+
+* **helm:** update version badges in README for Garage UI ([28c186f](https://github.com/Noooste/garage-ui/commit/28c186f3eba1a1c111100712f1eaec22a5d18eb2))
+
 ## [0.6.1](https://github.com/Noooste/garage-ui/compare/garage-ui-chart-v0.6.0...garage-ui-chart-v0.6.1) (2026-05-31)
 
 
