@@ -2,8 +2,8 @@
 
 A Helm chart for deploying [Garage UI](https://github.com/Noooste/garage-ui), a modern web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) distributed object storage systems.
 
-[![Version](https://img.shields.io/badge/version-0.8.2-blue.svg)](Chart.yaml) <!-- x-release-please-version -->
-[![App Version](https://img.shields.io/badge/app%20version-v0.8.2-green.svg)](Chart.yaml) <!-- x-release-please-version -->
+[![Version](https://img.shields.io/badge/version-0.8.3)](Chart.yaml) <!-- x-release-please-version -->
+[![App Version](https://img.shields.io/badge/app%20version-v0.8.3)](Chart.yaml) <!-- x-release-please-version -->
 
 ## Table of Contents
 
