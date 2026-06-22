@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/Noooste/garage-ui/compare/v0.8.3...v0.8.4) (2026-06-22)
+
+
+### Bug Fixes
+
+* **helm:** track appVersion in release-please and fix badges ([1ffdfe8](https://github.com/Noooste/garage-ui/commit/1ffdfe83c884dc5e39d071343d5269164746c536))
+
 ## [0.8.3](https://github.com/Noooste/garage-ui/compare/v0.8.2...v0.8.3) (2026-06-21)
 
 
