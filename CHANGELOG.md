@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.5](https://github.com/Noooste/garage-ui/compare/v0.8.4...v0.8.5) (2026-07-03)
+
+
+### Bug Fixes
+
+* **frontend:** add downloadObject function for downloading files from a bucket ([430d1a5](https://github.com/Noooste/garage-ui/commit/430d1a5d68e4f9915a2951d5b31c1b5ea56cb24c))
+
 ## [0.8.4](https://github.com/Noooste/garage-ui/compare/v0.8.3...v0.8.4) (2026-06-22)
 
 

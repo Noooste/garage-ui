@@ -3,8 +3,8 @@ name: garage-ui
 description: A Helm chart for Garage UI - Web interface for Garage S3 object storage
 icon: https://helm.noste.dev/garage.png
 type: application
-version: 0.8.4 # x-release-please-version
-appVersion: v0.8.4 # x-release-please-version
+version: 0.8.5 # x-release-please-version
+appVersion: v0.8.5 # x-release-please-version
 keywords:
   - garage
   - s3
