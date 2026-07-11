@@ -322,10 +322,23 @@
                   "description": "Path to roles in the OIDC token claims",
                   "default": "resource_access.garage-ui.roles"
                 },
+                "team_attribute_path": {
+                  "type": "string",
+                  "description": "go-jmespath path to the team/group claim used by config.access_control (same convention as role_attribute_path). Required only when access_control.teams is set; empty disables team resolution",
+                  "default": ""
+                },
                 "admin_role": {
                   "type": "string",
                   "description": "Role name that grants admin privileges",
                   "default": "admin"
+                },
+                "admin_roles": {
+                  "type": "array",
+                  "description": "Additional admin role names. A user is granted admin if ANY of their roles matches admin_role or any entry here",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": []
                 },
                 "tls_skip_verify": {
                   "type": "boolean",
@@ -427,6 +440,77 @@
               "description": "Log output format",
               "enum": ["json", "text"],
               "default": "json"
+            }
+          }
+        },
+        "access_control": {
+          "type": "object",
+          "description": "Optional team-based access control (issue #33). When present (even empty) authorization is default-deny: OIDC users get only what their teams grant, and users matching no team are denied everywhere. When omitted, every authenticated user has full access. UI-layer policy only, NOT a security boundary: anyone holding the Garage admin token or S3 keys bypasses it. Requires auth.oidc.team_attribute_path when teams are set. See docs/access-control.md",
+          "properties": {
+            "presets": {
+              "type": "object",
+              "description": "Named, reusable permission lists referenced from bindings/cluster_permissions via the 'preset:<name>' syntax. Presets may reference other presets",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "teams": {
+              "type": "array",
+              "description": "Maps IdP claim values to bucket-prefix bindings and cluster-level permissions",
+              "items": {
+                "type": "object",
+                "required": ["name", "claim_values"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Unique team name"
+                  },
+                  "claim_values": {
+                    "type": "array",
+                    "description": "Values matched (exact string, no wildcards) against the team_attribute_path claim",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  },
+                  "bindings": {
+                    "type": "array",
+                    "description": "Prefix-scoped permission grants over buckets whose names match one of the prefixes",
+                    "items": {
+                      "type": "object",
+                      "required": ["bucket_prefixes", "permissions"],
+                      "properties": {
+                        "bucket_prefixes": {
+                          "type": "array",
+                          "description": "Bucket-name prefixes this binding applies to. Use '*' to match every bucket",
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1
+                        },
+                        "permissions": {
+                          "type": "array",
+                          "description": "Prefix-scoped permissions, preset references (preset:<name>), or trailing-star globs (e.g. bucket.*, object.*)",
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1
+                        }
+                      }
+                    }
+                  },
+                  "cluster_permissions": {
+                    "type": "array",
+                    "description": "Global (cluster-level) permissions granted to the team, e.g. cluster.status, cluster.health",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
             }
           }
         }

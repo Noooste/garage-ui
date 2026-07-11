@@ -113,6 +113,11 @@ config:
       role_attribute_path: "resource_access.garage-ui.roles"
       admin_role: "admin"
       admin_roles: []
+      # Team-based access control (optional). OIDC claim (go-jmespath, same
+      # convention as role_attribute_path) listing the user's teams. Required
+      # only when config.access_control.teams is set; leave empty to disable.
+      # See config.access_control below and docs/access-control.md.
+      team_attribute_path: ""
       # TLS settings
       tls_skip_verify: false
       # Session settings
@@ -146,6 +151,21 @@ config:
     level: "info"
     # Options: json, text
     format: "json"
+
+  # access_control:
+  #   presets:
+  #     bucket_readonly: [bucket.list, bucket.read, object.list, object.read]
+  #     bucket_owner: ["preset:bucket_readonly", bucket.create, bucket.update,
+  #                    bucket.delete, object.write, object.delete]
+  #   teams:
+  #     - name: backend
+  #       claim_values: ["garage-team-backend"]   # matched against the team_attribute_path claim
+  #       bindings:
+  #         - bucket_prefixes: ["backend-"]
+  #           permissions: ["preset:bucket_owner"]
+  #         - bucket_prefixes: ["shared-"]
+  #           permissions: ["preset:bucket_readonly"]
+  #       cluster_permissions: [cluster.status, cluster.health]
 
 # Pod annotations
 podAnnotations: {}

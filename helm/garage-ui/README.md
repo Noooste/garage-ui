@@ -225,6 +225,45 @@ config:
       # ... additional OIDC settings
 ```
 
+#### Multi-User Access Control (optional)
+
+Scope what each OIDC user can see and do, based on the teams in their token
+claims. **Absent by default**, so every authenticated user keeps full access.
+When set, authorization becomes default-deny.
+
+> **Not a security boundary.** This is UI-layer policy only. Anyone holding the
+> Garage admin token or raw S3 keys bypasses it. See
+> [docs/access-control.md](../../docs/access-control.md) for the full model and
+> permission vocabulary.
+
+```yaml
+config:
+  auth:
+    oidc:
+      enabled: true
+      # OIDC claim (go-jmespath) listing the user's teams.
+      team_attribute_path: "groups"
+      # admin_role stays optional once access_control is set: unmatched users
+      # are denied rather than promoted to admin.
+  access_control:
+    presets:
+      bucket_readonly: [bucket.list, bucket.read, object.list, object.read]
+      bucket_owner: ["preset:bucket_readonly", bucket.create, bucket.update,
+                     bucket.delete, object.write, object.delete]
+    teams:
+      - name: backend
+        claim_values: ["garage-team-backend"]   # matched against the team_attribute_path claim
+        bindings:
+          - bucket_prefixes: ["backend-"]
+            permissions: ["preset:bucket_owner"]
+          - bucket_prefixes: ["shared-"]
+            permissions: ["preset:bucket_readonly"]
+        cluster_permissions: [cluster.status, cluster.health]
+```
+
+Admin-password and Garage-admin-token logins are always full admin in v1; only
+OIDC users can be scoped to a team.
+
 #### CORS Configuration
 
 ```yaml
