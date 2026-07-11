@@ -114,7 +114,7 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 	// Search mode: a recursive, best-effort substring search across the whole
 	// subtree under prefix. S3/Garage has no server-side substring search, so
 	// the backend scans and filters. This bypasses page-token pagination and
-	// max_keys — see S3Service.SearchObjects.
+	// max_keys, see S3Service.SearchObjects -> pagination is handled frontend side.
 	if search := c.Query("search", ""); search != "" {
 		results, err := h.s3Service.SearchObjects(ctx, bucketName, prefix, search)
 		if err != nil {

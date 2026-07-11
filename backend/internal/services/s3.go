@@ -241,17 +241,10 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, err)
 	}
 
-	// Drop directory marker objects (zero-byte keys ending in "/"). Garage
-	// returns them in Contents, but the UI renders folders from Prefixes — a
-	// marker shown as both a folder and a file is confusing. Any marker not
-	// already covered by a CommonPrefix is promoted to Prefixes below.
 	contents := make([]minio.ObjectInfo, 0, len(result.Contents))
 	markerKeys := make([]string, 0)
 	for _, obj := range result.Contents {
 		if strings.HasSuffix(obj.Key, "/") && obj.Size == 0 {
-			// A marker whose key equals the current listing prefix is the
-			// folder itself — drop it entirely so it doesn't render as a
-			// nameless child of itself.
 			if obj.Key != prefix {
 				markerKeys = append(markerKeys, obj.Key)
 			}
@@ -332,21 +325,12 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 	}, nil
 }
 
-// Search scan bounds. S3 (and therefore Garage) has no server-side substring
-// search — only prefix matching — so SearchObjects lists objects recursively
-// and filters keys in Go. These caps keep a single search bounded on large
-// buckets; when either is hit the result is marked truncated (best-effort).
 const (
 	searchMaxScan    = 10000 // stop after scanning this many objects
 	searchMaxResults = 1000  // stop after collecting this many matches
 	searchPageSize   = 1000  // objects requested per ListObjectsV2 page
 )
 
-// objectMatchesSearch reports whether an object key should appear in search
-// results: a case-insensitive substring match on the full key. Directory
-// markers (zero-byte keys ending in "/") are never matched — folders are a
-// navigation artifact, not searchable objects. lowerQuery must already be
-// lower-cased by the caller.
 func objectMatchesSearch(key string, size int64, lowerQuery string) bool {
 	if strings.HasSuffix(key, "/") && size == 0 {
 		return false
@@ -355,13 +339,7 @@ func objectMatchesSearch(key string, size int64, lowerQuery string) bool {
 }
 
 // SearchObjects performs a recursive, best-effort substring search over object
-// keys under the given prefix. It lists objects recursively (no delimiter) and
-// filters keys in Go, paging through the whole subtree so matches on any page
-// are found — unlike a single delimited page. To bound work on large buckets
-// it stops after searchMaxScan objects scanned or searchMaxResults matches,
-// setting IsTruncated when either cap is hit. ContentType is intentionally not
-// fetched (no per-object StatObject) to keep search cheap; search results show
-// the default type until the object is opened.
+// keys under the given prefix.
 func (s *S3Service) SearchObjects(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error) {
 	client, err := s.getMinioClient(ctx, bucketName, OpRead)
 	if err != nil {
@@ -380,10 +358,10 @@ scan:
 	for {
 		result, err := core.ListObjectsV2(
 			bucketName,
-			prefix, // objectPrefix — scope the search to the current subtree
-			"",     // startAfter (empty when using continuationToken)
-			token,  // continuationToken
-			"",     // delimiter empty => recursive listing (descend into folders)
+			prefix,
+			"",
+			token,
+			"",
 			searchPageSize,
 		)
 		if err != nil {
