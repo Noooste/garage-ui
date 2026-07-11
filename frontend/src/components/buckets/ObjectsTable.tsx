@@ -98,8 +98,8 @@ export function ObjectsTable({
       let compareValue = 0;
       switch (sortColumn) {
         case 'name': {
-          const aName = a.key.replace(currentPath, '').replace('/', '').toLowerCase();
-          const bName = b.key.replace(currentPath, '').replace('/', '').toLowerCase();
+          const aName = a.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
+          const bName = b.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
           compareValue = aName.localeCompare(bName);
           break;
         }
@@ -273,7 +273,7 @@ export function ObjectsTable({
                       onClick={() => onNavigateToFolder(obj.key)}
                       className="font-medium cursor-pointer underline hover:text-primary"
                     >
-                      {obj.key.replace(currentPath, '').replace('/', '')}
+                      {obj.key.replace(currentPath, '').replace(/\/$/, '')}
                     </button>
                   ) : (
                     <button
