@@ -22,6 +22,7 @@ interface ObjectsTableProps {
   objects: S3Object[];
   currentPath: string;
   searchQuery: string;
+  deepSearch: boolean;
   selectedFileKeys: Set<string>;
   isDragActive: boolean;
   isLoading?: boolean;
@@ -46,6 +47,7 @@ export function ObjectsTable({
   objects,
   currentPath,
   searchQuery,
+  deepSearch,
   selectedFileKeys,
   isDragActive,
   isLoading = false,
@@ -116,11 +118,13 @@ export function ObjectsTable({
     });
   }, [objects, searchQuery, sortColumn, sortDirection, currentPath]);
 
-  // Effect 2: Reset pagination ONLY on path navigation
+  // Effect 2: Reset pagination on path navigation or when a search begins/ends.
+  // Search results are a single flat list, so page-token state must not leak
+  // across the search/browse boundary.
   useEffect(() => {
     setPageTokens([undefined]);
     setCurrentPageIndex(0);
-  }, [currentPath]);
+  }, [currentPath, searchQuery, deepSearch]);
 
   // Update page tokens when we get a new next token
   useEffect(() => {
@@ -137,8 +141,12 @@ export function ObjectsTable({
     }
   }, [nextContinuationToken, isTruncated, currentPageIndex]);
 
-  const hasPrevious = currentPageIndex > 0;
-  const hasNext = isTruncated;
+  // Prefix search is a normal server-side paginated listing (query folded into
+  // the prefix), so token paging still applies. Deep search returns all matches
+  // in one flat, capped list, so token paging does not apply there.
+  const isDeepSearching = deepSearch && searchQuery.trim().length > 0;
+  const hasPrevious = !isDeepSearching && currentPageIndex > 0;
+  const hasNext = !isDeepSearching && isTruncated;
 
   const handleNextPage = () => {
     if (hasNext && nextContinuationToken) {
@@ -395,7 +403,9 @@ export function ObjectsTable({
         {/* Pagination info and controls */}
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">
-            Page {currentPageIndex + 1} • Showing {filteredObjects.length} item{filteredObjects.length !== 1 ? 's' : ''}
+            {isDeepSearching
+              ? `Found ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' — showing first results, refine to narrow' : ''}`
+              : `Page ${currentPageIndex + 1} • Showing ${filteredObjects.length} item${filteredObjects.length !== 1 ? 's' : ''}`}
           </span>
 
           <div className="flex items-center gap-2">

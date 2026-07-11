@@ -6,7 +6,7 @@ import {ObjectsTable} from './ObjectsTable';
 import {CreateDirectoryDialog} from './CreateDirectoryDialog';
 import {DeleteObjectDialog} from './DeleteObjectDialog';
 import {UploadProgress} from './UploadProgress';
-import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, Search, Trash, Upload} from 'lucide-react';
+import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, ScanSearch, Search, Trash, Upload} from 'lucide-react';
 import {getBreadcrumbs} from '@/lib/file-utils';
 import type {S3Object, UploadTask} from '@/types';
 
@@ -15,11 +15,13 @@ interface ObjectBrowserViewProps {
   objects: S3Object[];
   currentPath: string;
   searchQuery: string;
+  deepSearch: boolean;
   isLoading?: boolean;
   isTruncated?: boolean;
   nextContinuationToken?: string;
   itemsPerPage: number;
   onSearchChange: (query: string) => void;
+  onDeepSearchChange: (enabled: boolean) => void;
   onNavigateToFolder: (path: string) => void;
   onBackToBuckets: () => void;
   onUploadFiles: (files: File[]) => Promise<boolean>;
@@ -41,11 +43,13 @@ export function ObjectBrowserView({
   objects,
   currentPath,
   searchQuery,
+  deepSearch,
   isLoading = false,
   isTruncated = false,
   nextContinuationToken,
   itemsPerPage,
   onSearchChange,
+  onDeepSearchChange,
   onNavigateToFolder,
   onBackToBuckets,
   onUploadFiles,
@@ -199,14 +203,31 @@ export function ObjectBrowserView({
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-full sm:max-w-xs">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search objects..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-8"
-            />
+          <div className="flex flex-1 items-center gap-2 max-w-full sm:max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={deepSearch ? 'Deep search names…' : 'Search by name prefix…'}
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Button
+              type="button"
+              variant={deepSearch ? 'primary' : 'secondary'}
+              onClick={() => onDeepSearchChange(!deepSearch)}
+              aria-pressed={deepSearch}
+              title={
+                deepSearch
+                  ? 'Deep search: ON. Matches names anywhere and descends into subfolders. Scans the bucket — results may be partial on very large buckets. Click for fast prefix search.'
+                  : 'Fast prefix search: matches the start of object names in this folder (like the AWS S3 / Cloudflare R2 console). Click to enable deep search (substring + subfolders).'
+              }
+              className="shrink-0"
+            >
+              <ScanSearch className="h-4 w-4" />
+              <span className="hidden sm:inline">Deep</span>
+            </Button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {selectedFileKeys.size > 0 && (
@@ -352,6 +373,7 @@ export function ObjectBrowserView({
             objects={objects}
             currentPath={currentPath}
             searchQuery={searchQuery}
+            deepSearch={deepSearch}
             selectedFileKeys={selectedFileKeys}
             isDragActive={isDragActive}
             isLoading={isLoading && !isRefreshing && !isNavigating}

@@ -23,14 +23,15 @@ var _ services.S3Storage = (*S3Mock)(nil)
 // per-method function fields they care about; unset methods return
 // s3NotConfigured.
 type S3Mock struct {
-	ListObjectsFn          func(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error)
-	UploadObjectFn         func(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error)
+	ListObjectsFn           func(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error)
+	SearchObjectsFn         func(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error)
+	UploadObjectFn          func(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error)
 	CreateDirectoryMarkerFn func(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error)
-	GetObjectFn            func(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error)
-	ObjectExistsFn         func(ctx context.Context, bucketName, key string) (bool, error)
-	DeleteObjectFn         func(ctx context.Context, bucketName, key string) error
-	GetObjectMetadataFn    func(ctx context.Context, bucketName, key string) (*models.ObjectInfo, error)
-	GetPresignedURLFn      func(ctx context.Context, bucketName, key string, expiresIn time.Duration) (string, error)
+	GetObjectFn             func(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error)
+	ObjectExistsFn          func(ctx context.Context, bucketName, key string) (bool, error)
+	DeleteObjectFn          func(ctx context.Context, bucketName, key string) error
+	GetObjectMetadataFn     func(ctx context.Context, bucketName, key string) (*models.ObjectInfo, error)
+	GetPresignedURLFn       func(ctx context.Context, bucketName, key string, expiresIn time.Duration) (string, error)
 	DeleteMultipleObjectsFn func(ctx context.Context, bucketName string, keys []string) error
 	UploadMultipleObjectsFn func(ctx context.Context, bucketName string, files []struct {
 		Key         string
@@ -53,6 +54,14 @@ func (m *S3Mock) ListObjects(ctx context.Context, bucketName, prefix string, max
 		return nil, s3NotConfigured("ListObjects")
 	}
 	return m.ListObjectsFn(ctx, bucketName, prefix, maxKeys, continuationToken)
+}
+
+func (m *S3Mock) SearchObjects(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error) {
+	m.record("SearchObjects", bucketName, prefix, search)
+	if m.SearchObjectsFn == nil {
+		return nil, s3NotConfigured("SearchObjects")
+	}
+	return m.SearchObjectsFn(ctx, bucketName, prefix, search)
 }
 
 func (m *S3Mock) UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error) {

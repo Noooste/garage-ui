@@ -11,6 +11,7 @@ import (
 
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	logpkg "Noooste/garage-ui/pkg/logger"
 	"Noooste/garage-ui/pkg/utils"
 
 	"github.com/minio/minio-go/v7"
@@ -328,6 +329,112 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		Count:                 len(objects),
 		IsTruncated:           result.IsTruncated,
 		NextContinuationToken: result.NextContinuationToken,
+	}, nil
+}
+
+// Search scan bounds. S3 (and therefore Garage) has no server-side substring
+// search — only prefix matching — so SearchObjects lists objects recursively
+// and filters keys in Go. These caps keep a single search bounded on large
+// buckets; when either is hit the result is marked truncated (best-effort).
+const (
+	searchMaxScan    = 10000 // stop after scanning this many objects
+	searchMaxResults = 1000  // stop after collecting this many matches
+	searchPageSize   = 1000  // objects requested per ListObjectsV2 page
+)
+
+// objectMatchesSearch reports whether an object key should appear in search
+// results: a case-insensitive substring match on the full key. Directory
+// markers (zero-byte keys ending in "/") are never matched — folders are a
+// navigation artifact, not searchable objects. lowerQuery must already be
+// lower-cased by the caller.
+func objectMatchesSearch(key string, size int64, lowerQuery string) bool {
+	if strings.HasSuffix(key, "/") && size == 0 {
+		return false
+	}
+	return strings.Contains(strings.ToLower(key), lowerQuery)
+}
+
+// SearchObjects performs a recursive, best-effort substring search over object
+// keys under the given prefix. It lists objects recursively (no delimiter) and
+// filters keys in Go, paging through the whole subtree so matches on any page
+// are found — unlike a single delimited page. To bound work on large buckets
+// it stops after searchMaxScan objects scanned or searchMaxResults matches,
+// setting IsTruncated when either cap is hit. ContentType is intentionally not
+// fetched (no per-object StatObject) to keep search cheap; search results show
+// the default type until the object is opened.
+func (s *S3Service) SearchObjects(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error) {
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
+	}
+
+	core := &minio.Core{Client: client}
+	lowerQuery := strings.ToLower(search)
+
+	matches := make([]models.ObjectInfo, 0, 64)
+	scanned := 0
+	truncated := false
+	token := ""
+
+scan:
+	for {
+		result, err := core.ListObjectsV2(
+			bucketName,
+			prefix, // objectPrefix — scope the search to the current subtree
+			"",     // startAfter (empty when using continuationToken)
+			token,  // continuationToken
+			"",     // delimiter empty => recursive listing (descend into folders)
+			searchPageSize,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search objects in bucket %s: %w", bucketName, err)
+		}
+
+		for _, obj := range result.Contents {
+			scanned++
+			if objectMatchesSearch(obj.Key, obj.Size, lowerQuery) {
+				matches = append(matches, models.ObjectInfo{
+					Key:          obj.Key,
+					Size:         obj.Size,
+					LastModified: obj.LastModified,
+					ETag:         obj.ETag,
+					StorageClass: obj.StorageClass,
+				})
+				if len(matches) >= searchMaxResults {
+					truncated = true
+					break scan
+				}
+			}
+			if scanned >= searchMaxScan {
+				truncated = true
+				break scan
+			}
+		}
+
+		if !result.IsTruncated || result.NextContinuationToken == "" {
+			break
+		}
+		token = result.NextContinuationToken
+	}
+
+	if truncated {
+		logpkg.FromCtx(ctx).Warn().
+			Str("bucket", bucketName).
+			Str("prefix", prefix).
+			Int("scanned", scanned).
+			Int("matches", len(matches)).
+			Msg("search hit scan/result cap; results are partial")
+	}
+
+	return &models.ObjectListResponse{
+		Bucket:      bucketName,
+		Objects:     matches,
+		Prefixes:    []string{},
+		Count:       len(matches),
+		IsTruncated: truncated,
+		// Search returns all matches up to the cap in one response; there is no
+		// token-based pagination for search results.
+		NextContinuationToken: "",
 	}, nil
 }
 

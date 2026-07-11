@@ -10,6 +10,7 @@ export function BucketObjects() {
 
   const [currentPath, setCurrentPath] = useState(searchParams.get('prefix') ?? '');
   const [searchQuery, setSearchQuery] = useState('');
+  const [deepSearch, setDeepSearch] = useState(false);
   const [initialPageToken, setInitialPageToken] = useState<string | undefined>(
     searchParams.get('page') ?? undefined,
   );
@@ -40,10 +41,13 @@ export function BucketObjects() {
     deleteMultipleObjects,
     createDirectory,
     fetchObjects,
-  } = useBucketObjects(bucketName, currentPath);
+  } = useBucketObjects(bucketName, currentPath, searchQuery, deepSearch);
 
   const handleNavigateToFolder = (path: string) => {
     setCurrentPath(path);
+    // Navigating to a folder should show that folder's contents, not a stale
+    // filter carried over from the folder we came from.
+    setSearchQuery('');
     const next = new URLSearchParams();
     if (path) next.set('prefix', path);
     setSearchParams(next);
@@ -97,11 +101,13 @@ export function BucketObjects() {
         objects={objects}
         currentPath={currentPath}
         searchQuery={searchQuery}
+        deepSearch={deepSearch}
         isLoading={isLoading}
         isTruncated={isTruncated}
         nextContinuationToken={nextContinuationToken}
         itemsPerPage={itemsPerPage}
         onSearchChange={setSearchQuery}
+        onDeepSearchChange={setDeepSearch}
         onNavigateToFolder={handleNavigateToFolder}
         onBackToBuckets={handleBackToBuckets}
         onUploadFiles={uploadFiles}
