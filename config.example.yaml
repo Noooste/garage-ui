@@ -34,6 +34,12 @@ auth:
   # The key is a 64-byte Ed25519 private key
   jwt_private_key: "" # Leave empty to auto-generate, or provide PEM-encoded Ed25519 private key
 
+  # Expose Prometheus metrics at top-level /metrics WITHOUT authentication.
+  # Needed for Prometheus to scrape when auth (admin/token/oidc) is enabled.
+  # WARNING: exposes operational cluster telemetry (no object data or secrets)
+  # to anyone who can reach the port. Restrict with a NetworkPolicy / firewall.
+  metrics_public: false # Set to true to serve /metrics unauthenticated
+
   # Admin Authentication (username/password)
   admin:
     enabled: false # Set to true to enable admin login

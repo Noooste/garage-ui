@@ -74,6 +74,14 @@ config:
       name: ""
       key: "jwt-key.pem"
 
+    # Expose Prometheus metrics at top-level /metrics WITHOUT authentication.
+    # Required for Prometheus to scrape when auth (admin/token/oidc) is enabled,
+    # since scrapers do not send credentials. Pairs with serviceMonitor below.
+    # WARNING: exposes operational cluster telemetry (bucket counts, request
+    # rates, storage sizes) unauthenticated, with no object data or secrets. Restrict
+    # access with a NetworkPolicy / trusted scrape network.
+    metrics_public: false
+
     # Admin authentication (username/password)
     admin:
       enabled: false
@@ -236,7 +244,9 @@ readinessProbe:
 serviceMonitor:
   enabled: false
   interval: 30s
-  path: /api/v1/monitoring/metrics
+  # Scrape path. The default /metrics is served only when
+  # config.auth.metrics_public is true (required when authentication is enabled).
+  path: /metrics
   labels: {}
 
 # NetworkPolicy

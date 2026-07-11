@@ -689,16 +689,17 @@ Enable Prometheus metrics scraping (requires Prometheus Operator):
 serviceMonitor:
   enabled: true
   interval: 30s
-  path: /api/v1/monitoring/metrics
+  # /metrics is served only when config.auth.metrics_public is true
+  path: /metrics
   labels:
     prometheus: kube-prometheus
 ```
 
 ### Metrics Endpoint
 
-The application exposes metrics at:
-- Path: `/api/v1/monitoring/metrics`
-- Format: Prometheus format (proxies Garage Admin API metrics)
+The application exposes Prometheus-format metrics (proxying the Garage Admin API) at:
+- `/api/v1/monitoring/metrics`: always registered, requires authentication.
+- `/metrics`: top-level, unauthenticated. Served ONLY when `config.auth.metrics_public` is `true`. Use this for Prometheus scraping when authentication is enabled, and restrict access with a NetworkPolicy / trusted scrape network.
 
 ### Health Checks
 

@@ -49,6 +49,16 @@ func SetupRoutes(
 	// Auth configuration endpoint (always accessible, no auth required)
 	app.Get("/auth/config", authHandler.GetAuthConfig)
 
+	// Public Prometheus metrics endpoint (no auth), opt-in via auth.metrics_public.
+	// Registered outside /api/v1 so it bypasses the AuthMiddleware/ResolveSubject
+	// cascade and the VerifyRouteCoverage fail-closed guard entirely; the
+	// authenticated /api/v1/monitoring/metrics route is unaffected. Because it is
+	// registered before the SPA fallback below, Fiber matches it first.
+	// Protect it at the network layer (NetworkPolicy / trusted scrape network).
+	if cfg.Auth.MetricsPublic {
+		app.Get("/metrics", monitoringHandler.GetMetrics)
+	}
+
 	// API v1 group
 	api := app.Group("/api/v1")
 
@@ -333,7 +343,8 @@ func SetupRoutes(
 			if strings.HasPrefix(path, "/api/") ||
 				strings.HasPrefix(path, "/auth") ||
 				strings.HasPrefix(path, "/health") ||
-				strings.HasPrefix(path, "/docs") {
+				strings.HasPrefix(path, "/docs") ||
+				path == "/metrics" {
 				logger.Debug().Str("path", path).Msg("API or health check route, skipping SPA fallback")
 				return c.Next()
 			}

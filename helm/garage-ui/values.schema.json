@@ -199,6 +199,11 @@
                 }
               }
             },
+            "metrics_public": {
+              "type": "boolean",
+              "description": "Expose Prometheus metrics at top-level /metrics without authentication (required for scraping when auth is enabled). Restrict access with a NetworkPolicy.",
+              "default": false
+            },
             "admin": {
               "type": "object",
               "description": "Admin authentication settings (username/password)",
@@ -846,7 +851,7 @@
         "path": {
           "type": "string",
           "description": "Metrics endpoint path",
-          "default": "/api/v1/monitoring/metrics"
+          "default": "/metrics"
         },
         "labels": {
           "type": "object",

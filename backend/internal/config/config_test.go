@@ -894,3 +894,49 @@ func TestIsProduction(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_MetricsPublic_DefaultsFalse(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.MetricsPublic {
+		t.Errorf("Auth.MetricsPublic = true, want false by default")
+	}
+}
+
+func TestLoad_MetricsPublic_YAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+auth:
+  metrics_public: true
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Auth.MetricsPublic {
+		t.Errorf("Auth.MetricsPublic = false, want true from YAML")
+	}
+}
+
+func TestLoad_MetricsPublic_EnvOverridesYAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+auth:
+  metrics_public: false
+`)
+	t.Setenv("GARAGE_UI_AUTH_METRICS_PUBLIC", "true")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Auth.MetricsPublic {
+		t.Errorf("Auth.MetricsPublic = false, want true (env should override YAML)")
+	}
+}
