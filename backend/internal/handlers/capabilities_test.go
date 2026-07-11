@@ -79,6 +79,15 @@ func TestCapabilities_V1(t *testing.T) {
 	}
 }
 
+func TestSortedPermsEmptyReturnsNil(t *testing.T) {
+	if got := sortedPerms(authz.PermSet{}); got != nil {
+		t.Errorf("sortedPerms(empty) = %v, want nil", got)
+	}
+	if got := sortedPerms(nil); got != nil {
+		t.Errorf("sortedPerms(nil) = %v, want nil", got)
+	}
+}
+
 func TestGetCapabilitiesAccessControlDisabled(t *testing.T) {
 	h := NewCapabilitiesHandler("v2", services.CapabilitiesV2(), false)
 	app := fiber.New()

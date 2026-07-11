@@ -330,6 +330,17 @@ func TestValidate(t *testing.T) {
 			wantErrContains: "",
 		},
 		{
+			name: "access_control teams without team_attribute_path rejected",
+			mutate: func(c *Config) {
+				applyValidOIDC(c)
+				c.Auth.OIDC.TeamAttributePath = ""
+				c.AccessControl = &AccessControlConfig{
+					Teams: []TeamConfig{{Name: "t", ClaimValues: []string{"g"}}},
+				}
+			},
+			wantErrContains: "team_attribute_path is required",
+		},
+		{
 			name: "oidc disabled ignores missing client_id",
 			mutate: func(c *Config) {
 				c.Auth.OIDC.Enabled = false

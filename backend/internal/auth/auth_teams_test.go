@@ -52,3 +52,24 @@ func TestExtractTeamsFromAccessToken(t *testing.T) {
 		t.Errorf("empty token should return nil, got %v", got)
 	}
 }
+
+func TestExtractTeamsFromAccessToken_Malformed(t *testing.T) {
+	svc, err := NewAuthService(&config.AuthConfig{
+		OIDC: config.OIDCConfig{TeamAttributePath: "groups"},
+	}, &config.ServerConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fewer than two dot-separated segments.
+	if got := svc.ExtractTeamsFromAccessToken("single-segment"); got != nil {
+		t.Errorf("one-segment token = %v, want nil", got)
+	}
+	// Correct shape but the payload segment is not valid base64url.
+	if got := svc.ExtractTeamsFromAccessToken("hdr.!!!not-base64!!!.sig"); got != nil {
+		t.Errorf("bad base64 payload = %v, want nil", got)
+	}
+	// Valid base64url ("bm90anNvbg" -> "notjson") but not JSON.
+	if got := svc.ExtractTeamsFromAccessToken("hdr.bm90anNvbg.sig"); got != nil {
+		t.Errorf("non-JSON payload = %v, want nil", got)
+	}
+}

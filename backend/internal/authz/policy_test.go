@@ -103,6 +103,24 @@ func TestCompilePolicyValidationErrors(t *testing.T) {
 		{"binding with empty permissions", func(c *config.AccessControlConfig) {
 			c.Teams[0].Bindings[0].Permissions = nil
 		}, "has no permissions"},
+		{"empty team name", func(c *config.AccessControlConfig) {
+			c.Teams[0].Name = ""
+		}, "has no name"},
+		{"glob matches nothing in binding", func(c *config.AccessControlConfig) {
+			c.Teams[0].Bindings[0].Permissions = []string{"nonexistent.*"}
+		}, "matches no permission"},
+		{"preset references unknown preset", func(c *config.AccessControlConfig) {
+			c.Presets["broken"] = []string{"preset:ghost"}
+		}, "unknown preset"},
+		{"glob matches nothing in preset", func(c *config.AccessControlConfig) {
+			c.Presets["globby"] = []string{"nonexistent.*"}
+		}, "matches no permission"},
+		{"unknown permission in preset", func(c *config.AccessControlConfig) {
+			c.Presets["badperm"] = []string{"bucket.explode"}
+		}, "unknown permission"},
+		{"admin-only permission in preset", func(c *config.AccessControlConfig) {
+			c.Presets["adminy"] = []string{"key.create"}
+		}, "admin-only"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -116,6 +134,48 @@ func TestCompilePolicyValidationErrors(t *testing.T) {
 				t.Fatalf("error %q does not contain %q", err.Error(), tc.errPart)
 			}
 		})
+	}
+}
+
+func TestCompilePolicyPresetWithGlob(t *testing.T) {
+	// A preset may itself contain a trailing-star glob; it must expand at
+	// compile time just like a glob written directly in a binding.
+	cfg := validAC()
+	cfg.Presets["aliasops"] = []string{"bucket_alias.*"}
+	cfg.Teams[0].Bindings[0].Permissions = []string{"preset:aliasops"}
+	p, err := CompilePolicy(cfg)
+	if err != nil {
+		t.Fatalf("CompilePolicy: %v", err)
+	}
+	b0 := p.Teams[0].Bindings[0].Permissions
+	for _, want := range []string{"bucket_alias.add", "bucket_alias.remove"} {
+		if _, ok := b0[want]; !ok {
+			t.Errorf("preset glob did not expand %q: %v", want, b0)
+		}
+	}
+}
+
+func TestTeamsForClaimsDisabledReturnsNil(t *testing.T) {
+	p, err := CompilePolicy(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.TeamsForClaims([]string{"anything"}); got != nil {
+		t.Errorf("disabled policy matched %v, want nil", got)
+	}
+}
+
+func TestTeamsForClaimsDeduplicatesSameTeam(t *testing.T) {
+	// One team reachable via two claim values: presenting both must not
+	// return the team twice.
+	cfg := validAC()
+	cfg.Teams[0].ClaimValues = []string{"g-a", "g-b"}
+	p, err := CompilePolicy(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.TeamsForClaims([]string{"g-a", "g-b"}); len(got) != 1 {
+		t.Fatalf("TeamsForClaims returned %d teams, want 1 (deduped)", len(got))
 	}
 }
 

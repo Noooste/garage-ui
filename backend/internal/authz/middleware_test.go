@@ -117,6 +117,53 @@ func TestRequirePassthroughWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestMiddlewareEnabledReflectsPolicy(t *testing.T) {
+	if !middlewareFixture(t).Enabled() {
+		t.Error("Enabled() = false for a configured policy, want true")
+	}
+	disabled, _ := CompilePolicy(nil)
+	m := NewMiddleware(disabled, NewTeamResolver(disabled, nil), NewAuthorizer())
+	if m.Enabled() {
+		t.Error("Enabled() = true for a nil (disabled) policy, want false")
+	}
+}
+
+func TestResolveSubjectWithoutUserInfoDenies(t *testing.T) {
+	// Enabled middleware, but auth set no userInfo local: ResolveSubject leaves
+	// no subject, and Require then denies for want of one.
+	m := middlewareFixture(t)
+	app := newTestApp(m, nil)
+	if code := doReq(t, app, "GET", "/api/v1/buckets/backend-api", ""); code != 403 {
+		t.Errorf("enabled + no userInfo: status %d, want 403", code)
+	}
+}
+
+func TestRequireBucketFromBodyMalformedBody(t *testing.T) {
+	m := middlewareFixture(t)
+	app := newTestApp(m, &auth.UserInfo{Email: "a@x", AuthMethod: "oidc", Teams: []string{"g-backend"}})
+	// Malformed JSON: BucketFromBody's bind fails and returns an empty resource.
+	// An empty bucket is an unscoped check, so a team holding bucket.create in
+	// any binding is allowed (this is what proves the resource came back empty:
+	// a non-empty foreign bucket name would be denied instead).
+	if code := doReq(t, app, "POST", "/api/v1/buckets", "{not-json"); code != 200 {
+		t.Errorf("malformed body: status %d, want 200 (empty resource, any_binding)", code)
+	}
+}
+
+func TestRequireUnknownPermissionPanics(t *testing.T) {
+	m := middlewareFixture(t)
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("Require with an unknown permission: want panic, got none")
+		}
+		if msg, ok := r.(string); !ok || !strings.Contains(msg, "unknown permission") {
+			t.Errorf("panic value = %v, want message containing %q", r, "unknown permission")
+		}
+	}()
+	m.Require(ScopeNone, "bogus.permission")
+}
+
 func TestVerifyRouteCoverage(t *testing.T) {
 	m := middlewareFixture(t)
 
