@@ -30,10 +30,12 @@ type Service struct {
 
 // UserInfo represents authenticated user information
 type UserInfo struct {
-	Username string
-	Email    string
-	Name     string
-	Roles    []string
+	Username   string
+	Email      string
+	Name       string
+	Roles      []string
+	Teams      []string // raw team claim values (team_attribute_path), OIDC only
+	AuthMethod string   // "oidc" | "admin" | "token"; "" on legacy sessions
 }
 
 // NewAuthService creates a new authentication service
@@ -179,6 +181,10 @@ func (a *Service) VerifyIDToken(ctx context.Context, rawIDToken string) (*UserIn
 		userInfo.Roles = extractRoles(claims, a.authConfig.OIDC.RoleAttributePath)
 	}
 
+	if a.authConfig.OIDC.TeamAttributePath != "" {
+		userInfo.Teams = extractRoles(claims, a.authConfig.OIDC.TeamAttributePath)
+	}
+
 	return userInfo, nil
 }
 
@@ -219,6 +225,10 @@ func (a *Service) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserIn
 		userInfo.Roles = extractRoles(claims, a.authConfig.OIDC.RoleAttributePath)
 	}
 
+	if a.authConfig.OIDC.TeamAttributePath != "" {
+		userInfo.Teams = extractRoles(claims, a.authConfig.OIDC.TeamAttributePath)
+	}
+
 	return userInfo, nil
 }
 
@@ -250,6 +260,33 @@ func (a *Service) ExtractRolesFromAccessToken(accessToken string) []string {
 	}
 
 	return extractRoles(claims, a.authConfig.OIDC.RoleAttributePath)
+}
+
+// ExtractTeamsFromAccessToken parses the access token JWT payload and extracts
+// team claim values using the configured team_attribute_path. Same rationale
+// as ExtractRolesFromAccessToken: Keycloak-style IdPs often emit group claims
+// only in the access token, which came from a verified code exchange.
+func (a *Service) ExtractTeamsFromAccessToken(accessToken string) []string {
+	if accessToken == "" || a.authConfig.OIDC.TeamAttributePath == "" {
+		return nil
+	}
+
+	parts := strings.Split(accessToken, ".")
+	if len(parts) < 2 {
+		return nil
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil
+	}
+
+	return extractRoles(claims, a.authConfig.OIDC.TeamAttributePath)
 }
 
 // IsAdmin checks if the user has any of the configured admin roles.
@@ -388,9 +425,11 @@ func (a *Service) ValidateSessionToken(tokenString string) (*UserInfo, error) {
 	}
 
 	return &UserInfo{
-		Username: claims.Username,
-		Email:    claims.Email,
-		Name:     claims.Name,
-		Roles:    claims.Roles,
+		Username:   claims.Username,
+		Email:      claims.Email,
+		Name:       claims.Name,
+		Roles:      claims.Roles,
+		Teams:      claims.Teams,
+		AuthMethod: claims.AuthMethod,
 	}, nil
 }

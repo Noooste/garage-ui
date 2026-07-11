@@ -2,6 +2,7 @@ package routes
 
 import (
 	"Noooste/garage-ui/internal/auth"
+	"Noooste/garage-ui/internal/authz"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
@@ -30,6 +31,7 @@ func SetupRoutes(
 	clusterHandler *handlers.ClusterHandler,
 	monitoringHandler *handlers.MonitoringHandler,
 	capabilitiesHandler *handlers.CapabilitiesHandler,
+	az *authz.Middleware,
 ) {
 	// Apply CORS middleware globally
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
@@ -53,31 +55,34 @@ func SetupRoutes(
 	// Apply authentication middleware to all API routes
 	api.Use(middleware.AuthMiddleware(&cfg.Auth, authService))
 
+	// Resolve the authz Subject once per request, right after authentication.
+	api.Use(az.ResolveSubject())
+
 	api.Get("/capabilities", capabilitiesHandler.GetCapabilities)
 
 	// Bucket routes
 	buckets := api.Group("/buckets")
 	{
-		buckets.Get("/", bucketHandler.ListBuckets)                             // List all buckets
-		buckets.Post("/", bucketHandler.CreateBucket)                           // Create a new bucket
-		buckets.Get("/:name", bucketHandler.GetBucketInfo)                      // Get bucket info
-		buckets.Delete("/:name", bucketHandler.DeleteBucket)                    // Delete a bucket
-		buckets.Post("/:name/permissions", bucketHandler.GrantBucketPermission) // Grant bucket permissions
-		buckets.Put("/:name/website", bucketHandler.UpdateBucketWebsite)        // Update bucket website configuration
-		buckets.Put("/:name/quotas", bucketHandler.UpdateBucketQuotas)          // Update bucket quotas
+		buckets.Get("/", az.Require(authz.ScopeNone, authz.PermBucketList), bucketHandler.ListBuckets)                                                                        // List all buckets
+		buckets.Post("/", az.Require(authz.BucketFromBody(), authz.PermBucketCreate), bucketHandler.CreateBucket)                                                             // Create a new bucket
+		buckets.Get("/:name", az.Require(authz.BucketFromParam("name"), authz.PermBucketRead), bucketHandler.GetBucketInfo)                                                   // Get bucket info
+		buckets.Delete("/:name", az.Require(authz.BucketFromParam("name"), authz.PermBucketDelete), bucketHandler.DeleteBucket)                                               // Delete a bucket
+		buckets.Post("/:name/permissions", az.Require(authz.BucketFromParam("name"), authz.PermAllowBucketKey, authz.PermDenyBucketKey), bucketHandler.GrantBucketPermission) // Grant bucket permissions (allow+deny)
+		buckets.Put("/:name/website", az.Require(authz.BucketFromParam("name"), authz.PermBucketUpdate), bucketHandler.UpdateBucketWebsite)                                   // Update bucket website configuration
+		buckets.Put("/:name/quotas", az.Require(authz.BucketFromParam("name"), authz.PermBucketUpdate), bucketHandler.UpdateBucketQuotas)                                     // Update bucket quotas
 	}
 
 	// Object routes
 	objects := api.Group("/buckets/:bucket/objects")
 	{
-		objects.Get("/", objectHandler.ListObjects)                           // List objects in bucket
-		objects.Post("/", objectHandler.UploadObject)                         // Upload object (multipart)
-		objects.Post("/upload-multiple", objectHandler.UploadMultipleObjects) // Upload multiple objects
-		objects.Post("/delete-multiple", objectHandler.DeleteMultipleObjects) // Delete multiple objects
+		objects.Get("/", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectList), objectHandler.ListObjects)                             // List objects in bucket
+		objects.Post("/", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectWrite), objectHandler.UploadObject)                          // Upload object (multipart)
+		objects.Post("/upload-multiple", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectWrite), objectHandler.UploadMultipleObjects)  // Upload multiple objects
+		objects.Post("/delete-multiple", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectHandler.DeleteMultipleObjects) // Delete multiple objects
 	}
 
 	// Directory routes (zero-byte directory markers)
-	api.Post("/buckets/:bucket/directories", objectHandler.CreateDirectory)
+	api.Post("/buckets/:bucket/directories", az.Require(authz.BucketFromParam("bucket"), authz.PermObjectWrite), objectHandler.CreateDirectory)
 
 	// Fiber v3 does not auto-decode wildcard params; fall back to the raw
 	// value when QueryUnescape fails.
@@ -114,38 +119,41 @@ func SetupRoutes(
 		return objectHandler.GetObjectMetadata(c)
 	}
 
-	// Register with auth middleware
-	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), objectWildcardHandler)
-	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), objectDeleteHandler)
-	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), objectHeadHandler)
+	// Register with auth middleware. Although these routes live on app, not
+	// api, the api group's .Use() middlewares (AuthMiddleware, ResolveSubject)
+	// cascade onto them by path prefix, so ResolveSubject is not repeated here
+	// (TestWildcardObjectRoutes_EnforceAuthzViaGroupCascade locks that in).
+	app.Get("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectWildcardHandler)
+	app.Delete("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectDelete), objectDeleteHandler)
+	app.Head("/api/v1/buckets/:bucket/objects/*", middleware.AuthMiddleware(&cfg.Auth, authService), az.Require(authz.BucketFromParam("bucket"), authz.PermObjectRead), objectHeadHandler)
 
 	// User/Key management routes
 	users := api.Group("/users")
 	{
-		users.Get("/", userHandler.ListUsers)                          // List all users/keys
-		users.Post("/", userHandler.CreateUser)                        // Create new user/key
-		users.Get("/:access_key", userHandler.GetUser)                 // Get user info
-		users.Get("/:access_key/secret", userHandler.GetUserSecretKey) // Get user secret key
-		users.Delete("/:access_key", userHandler.DeleteUser)           // Delete user/key
-		users.Patch("/:access_key", userHandler.UpdateUserPermissions) // Update user permissions
+		users.Get("/", az.Require(authz.ScopeNone, authz.PermKeyList), userHandler.ListUsers)                                // List all users/keys
+		users.Post("/", az.Require(authz.ScopeNone, authz.PermKeyCreate), userHandler.CreateUser)                            // Create new user/key
+		users.Get("/:access_key", az.Require(authz.ScopeNone, authz.PermKeyRead), userHandler.GetUser)                       // Get user info
+		users.Get("/:access_key/secret", az.Require(authz.ScopeNone, authz.PermKeyReadSecret), userHandler.GetUserSecretKey) // Get user secret key
+		users.Delete("/:access_key", az.Require(authz.ScopeNone, authz.PermKeyDelete), userHandler.DeleteUser)               // Delete user/key
+		users.Patch("/:access_key", az.Require(authz.ScopeNone, authz.PermKeyUpdate), userHandler.UpdateUserPermissions)     // Update user permissions
 	}
 
 	// Cluster management routes
 	cluster := api.Group("/cluster")
 	{
-		cluster.Get("/health", clusterHandler.GetHealth)                            // Get cluster health
-		cluster.Get("/status", clusterHandler.GetStatus)                            // Get cluster status
-		cluster.Get("/statistics", clusterHandler.GetStatistics)                    // Get cluster statistics
-		cluster.Get("/nodes/:node_id", clusterHandler.GetNodeInfo)                  // Get node info
-		cluster.Get("/nodes/:node_id/statistics", clusterHandler.GetNodeStatistics) // Get node statistics
+		cluster.Get("/health", az.Require(authz.ScopeNone, authz.PermClusterHealth), clusterHandler.GetHealth)                             // Get cluster health
+		cluster.Get("/status", az.Require(authz.ScopeNone, authz.PermClusterStatus), clusterHandler.GetStatus)                             // Get cluster status
+		cluster.Get("/statistics", az.Require(authz.ScopeNone, authz.PermClusterStatistics), clusterHandler.GetStatistics)                 // Get cluster statistics
+		cluster.Get("/nodes/:node_id", az.Require(authz.ScopeNone, authz.PermNodeInfo), clusterHandler.GetNodeInfo)                        // Get node info
+		cluster.Get("/nodes/:node_id/statistics", az.Require(authz.ScopeNone, authz.PermNodeStatistics), clusterHandler.GetNodeStatistics) // Get node statistics
 	}
 
 	// Monitoring routes
 	monitoring := api.Group("/monitoring")
 	{
-		monitoring.Get("/metrics", monitoringHandler.GetMetrics)            // Get Prometheus metrics
-		monitoring.Get("/admin-health", monitoringHandler.CheckAdminHealth) // Check Admin API health
-		monitoring.Get("/dashboard", monitoringHandler.GetDashboardMetrics) // Get dashboard metrics
+		monitoring.Get("/metrics", az.Require(authz.ScopeNone, authz.PermClusterStatistics), monitoringHandler.GetMetrics)            // Get Prometheus metrics
+		monitoring.Get("/admin-health", az.Require(authz.ScopeNone, authz.PermClusterHealth), monitoringHandler.CheckAdminHealth)     // Check Admin API health
+		monitoring.Get("/dashboard", az.Require(authz.ScopeNone, authz.PermClusterStatistics), monitoringHandler.GetDashboardMetrics) // Get dashboard metrics
 	}
 
 	// Admin auth login endpoint (only if admin is enabled)
@@ -233,10 +241,11 @@ func SetupRoutes(
 					})
 				}
 
-				// Enforce admin role if configured. Roles are often absent from the
-				// ID token and the userinfo endpoint (Keycloak emits resource_access
-				// only in the access token by default), so fall back to the access
-				// token and then the userinfo endpoint before denying access.
+				// With access_control configured, non-admin users may log in:
+				// they get team-scoped (possibly zero) permissions and
+				// default-deny protects everything else. Without it, the
+				// admin role remains the only thing standing between an IdP
+				// account and full cluster access, so keep the historical gate.
 				adminRoles := cfg.Auth.OIDC.EffectiveAdminRoles()
 				if len(adminRoles) > 0 {
 					if !authService.IsAdmin(userInfo) {
@@ -249,7 +258,7 @@ func SetupRoutes(
 							userInfo.Roles = ui.Roles
 						}
 					}
-					if !authService.IsAdmin(userInfo) {
+					if cfg.AccessControl == nil && !authService.IsAdmin(userInfo) {
 						logger.Warn().
 							Str("username", userInfo.Username).
 							Strs("required_roles", adminRoles).
@@ -260,6 +269,19 @@ func SetupRoutes(
 						})
 					}
 				}
+
+				// Teams follow the same claim-location fallbacks as roles.
+				if cfg.Auth.OIDC.TeamAttributePath != "" && len(userInfo.Teams) == 0 {
+					if teams := authService.ExtractTeamsFromAccessToken(token.AccessToken); len(teams) > 0 {
+						userInfo.Teams = teams
+					}
+				}
+				if cfg.Auth.OIDC.TeamAttributePath != "" && len(userInfo.Teams) == 0 {
+					if ui, err := authService.GetUserInfo(ctx, token); err == nil && len(ui.Teams) > 0 {
+						userInfo.Teams = ui.Teams
+					}
+				}
+				userInfo.AuthMethod = "oidc"
 
 				// Generate JWT session token
 				sessionToken, err := authService.GenerateSessionToken(userInfo)

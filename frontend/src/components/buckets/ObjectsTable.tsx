@@ -29,7 +29,7 @@ interface ObjectsTableProps {
   nextContinuationToken?: string;
   itemsPerPage: number;
   onNavigateToFolder: (key: string) => void;
-  onDeleteObject: (object: S3Object) => void;
+  onDeleteObject?: (object: S3Object) => void;
   onToggleFileSelection: (key: string) => void;
   onSelectAllFiles: () => void;
   onPageChange: (token?: string) => void;
@@ -62,6 +62,7 @@ export function ObjectsTable({
   initialItemsPerPage,
 }: ObjectsTableProps) {
   const navigate = useNavigate();
+  const canDelete = Boolean(onDeleteObject);
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   // Store tokens for each page: [undefined (page 1), token1 (page 2), token2 (page 3), ...]
@@ -181,16 +182,18 @@ export function ObjectsTable({
         <Table>
           <TableHeader>
           <TableRow>
-            <TableHead className="w-[50px]">
-              <Checkbox
-                checked={
-                  filteredObjects.filter(obj => !obj.isFolder).length > 0 &&
-                  selectedFileKeys.size === filteredObjects.filter(obj => !obj.isFolder).length
-                }
-                onCheckedChange={onSelectAllFiles}
-                aria-label="Select all files"
-              />
-            </TableHead>
+            {canDelete && (
+              <TableHead className="w-[50px]">
+                <Checkbox
+                  checked={
+                    filteredObjects.filter(obj => !obj.isFolder).length > 0 &&
+                    selectedFileKeys.size === filteredObjects.filter(obj => !obj.isFolder).length
+                  }
+                  onCheckedChange={onSelectAllFiles}
+                  aria-label="Select all files"
+                />
+              </TableHead>
+            )}
           <TableHead
             className="cursor-pointer hover:bg-muted/50"
             onClick={() => handleSort('name')}
@@ -217,7 +220,7 @@ export function ObjectsTable({
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center py-12">
+            <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12">
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span>Loading objects...</span>
@@ -226,7 +229,7 @@ export function ObjectsTable({
           </TableRow>
         ) : filteredObjects.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+            <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12 text-muted-foreground">
               {searchQuery
                 ? 'No objects found matching your search'
                 : isDragActive
@@ -237,22 +240,24 @@ export function ObjectsTable({
         ) : (
           filteredObjects.map((obj) => (
             <TableRow key={obj.key}>
-              <TableCell className="w-[50px]">
-                {obj.isFolder ? (
-                  <Checkbox
-                    disabled
-                    checked={false}
-                    className="opacity-50 cursor-not-allowed bg-muted"
-                    aria-label="Folders cannot be selected"
-                  />
-                ) : (
-                  <Checkbox
-                    checked={selectedFileKeys.has(obj.key)}
-                    onCheckedChange={() => onToggleFileSelection(obj.key)}
-                    aria-label={`Select file ${obj.key}`}
-                  />
-                )}
-              </TableCell>
+              {canDelete && (
+                <TableCell className="w-[50px]">
+                  {obj.isFolder ? (
+                    <Checkbox
+                      disabled
+                      checked={false}
+                      className="opacity-50 cursor-not-allowed bg-muted"
+                      aria-label="Folders cannot be selected"
+                    />
+                  ) : (
+                    <Checkbox
+                      checked={selectedFileKeys.has(obj.key)}
+                      onCheckedChange={() => onToggleFileSelection(obj.key)}
+                      aria-label={`Select file ${obj.key}`}
+                    />
+                  )}
+                </TableCell>
+              )}
               <TableCell>
                 <div className="flex items-center gap-2">
                   {obj.isFolder ? (
@@ -357,14 +362,18 @@ export function ObjectsTable({
                         <Download className="h-4 w-4" />
                         Download
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => onDeleteObject(obj)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
+                      {onDeleteObject && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => onDeleteObject(obj)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}

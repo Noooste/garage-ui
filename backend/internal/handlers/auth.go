@@ -93,7 +93,8 @@ func (h *AuthHandler) LoginAdmin(c fiber.Ctx) error {
 
 	// Create user info object
 	userInfo := &auth.UserInfo{
-		Username: req.Username,
+		Username:   req.Username,
+		AuthMethod: "admin",
 	}
 
 	// Generate JWT session token
@@ -135,7 +136,8 @@ func (h *AuthHandler) LoginToken(c fiber.Ctx) error {
 	}
 
 	userInfo := &auth.UserInfo{
-		Username: "admin-token",
+		Username:   "admin-token",
+		AuthMethod: "token",
 	}
 
 	sessionToken, err := h.authService.GenerateSessionToken(userInfo)

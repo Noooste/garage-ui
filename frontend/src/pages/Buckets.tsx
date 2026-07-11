@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { useBuckets, useCreateBucket, useDeleteBucket } from '@/hooks/useApi';
+import { usePermissions } from '@/hooks/usePermissions';
 import { BucketListView } from '@/components/buckets/BucketListView';
 import { CreateBucketDialog } from '@/components/buckets/CreateBucketDialog';
 import { DangerousConfirmDialog } from '@/components/ui/dangerous-confirm-dialog';
@@ -16,6 +17,7 @@ export function Buckets() {
   const [deleteTarget, setDeleteTarget] = useState<Bucket | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const { hasAnyPerm } = usePermissions();
   const { data: buckets = [], isLoading } = useBuckets();
   const createMutation = useCreateBucket();
   const deleteMutation = useDeleteBucket();
@@ -48,9 +50,11 @@ export function Buckets() {
         title="Buckets"
         subtitle={`${buckets.length} bucket${buckets.length === 1 ? '' : 's'}`}
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus /> Create bucket
-          </Button>
+          hasAnyPerm('bucket.create') && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus /> Create bucket
+            </Button>
+          )
         }
       />
       <div className="p-4 sm:p-6">

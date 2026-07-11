@@ -30,6 +30,7 @@ A modern web interface to manage <a href="https://garagehq.deuxfleurs.fr/">Garag
 - **Access key management** - create keys, assign per-bucket permissions
 - **Cluster overview** - monitor node status, layout configuration, and storage usage
 - **Flexible authentication** - no auth, basic credentials, or OIDC (Keycloak, Authentik, etc.)
+- **Multi-user access control** - optional OIDC-team-based permissions, see [docs/access-control.md](docs/access-control.md)
 - **Easy deployment** - single Docker image or Helm chart, configure with one YAML file
 
 ## Quick Start

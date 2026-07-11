@@ -75,6 +75,8 @@ auth:
 
     # Role-based access (optional)
     role_attribute_path: "resource_access.garage-ui.roles"
+    # Team-based access control (optional, see access_control below).
+    # team_attribute_path: "groups"
     # Single admin role (backward-compatible).
     admin_role: "admin"
     # Multiple admin roles: a user is granted admin if ANY of their roles
@@ -93,6 +95,29 @@ auth:
     cookie_secure: false # Set to true in production with HTTPS
     cookie_http_only: true
     cookie_same_site: "lax" # lax, strict, none
+
+# Optional: team-based access control (issue #33).
+# Absent  -> every authenticated user has full access (historical behavior).
+# Present -> default-deny: OIDC users get only what their teams grant; users
+#            matching no team get 403 everywhere. admin_role users, admin
+#            password logins, and token logins are always full-admin in v1.
+# NOTE: this is UI-layer policy, NOT a security boundary. Anyone holding the
+# Garage admin token or S3 keys bypasses it entirely.
+#
+# access_control:
+#   presets:
+#     bucket_readonly: [bucket.list, bucket.read, object.list, object.read]
+#     bucket_owner: ["preset:bucket_readonly", bucket.create, bucket.update,
+#                    bucket.delete, object.write, object.delete]
+#   teams:
+#     - name: backend
+#       claim_values: ["garage-team-backend"]   # matched against team_attribute_path claim
+#       bindings:
+#         - bucket_prefixes: ["backend-"]
+#           permissions: ["preset:bucket_owner"]
+#         - bucket_prefixes: ["shared-"]
+#           permissions: ["preset:bucket_readonly"]
+#       cluster_permissions: [cluster.status, cluster.health]
 
 # CORS Configuration (for frontend)
 cors:

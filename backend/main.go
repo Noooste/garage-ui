@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"Noooste/garage-ui/internal/auth"
+	"Noooste/garage-ui/internal/authz"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
 	appmw "Noooste/garage-ui/internal/middleware"
@@ -115,7 +116,7 @@ func main() {
 		logger.Fatal().Err(err).Msg("Failed to connect to Garage admin API")
 	}
 	adminService := adminResult.Service
-	capabilitiesHandler := handlers.NewCapabilitiesHandler(adminResult.APIVersion, adminResult.Capabilities)
+	capabilitiesHandler := handlers.NewCapabilitiesHandler(adminResult.APIVersion, adminResult.Capabilities, cfg.AccessControl != nil)
 
 	logger.Info().Msg("Initializing S3 service")
 	s3Service := services.NewS3Service(&cfg.Garage, adminService)
@@ -139,6 +140,15 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to initialize auth service")
 	}
+
+	policy, err := authz.CompilePolicy(cfg.AccessControl)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Invalid access_control configuration")
+	}
+	if cfg.AccessControl != nil && !cfg.Auth.OIDC.Enabled {
+		logger.Warn().Msg("access_control is configured but OIDC is disabled: admin and token logins are always full-admin in v1, so the policy currently gates nothing")
+	}
+	azMiddleware := authz.NewMiddleware(policy, authz.NewTeamResolver(policy, cfg.Auth.OIDC.EffectiveAdminRoles()), authz.NewAuthorizer())
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(version)
@@ -212,7 +222,12 @@ func main() {
 		clusterHandler,
 		monitoringHandler,
 		capabilitiesHandler,
+		azMiddleware,
 	)
+
+	if err := authz.VerifyRouteCoverage(app); err != nil {
+		logger.Fatal().Err(err).Msg("authz route coverage check failed")
+	}
 
 	// Start server in a goroutine
 	go func() {

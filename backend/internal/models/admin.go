@@ -86,6 +86,10 @@ type GarageBucketInfo struct {
 	UnfinishedMultipartUploadParts int64                `json:"unfinishedMultipartUploadParts"`
 	UnfinishedMultipartUploadBytes int64                `json:"unfinishedMultipartUploadBytes"`
 	Quotas                         *BucketQuotas        `json:"quotas,omitempty"`
+
+	// EffectivePermissions is the caller's prefix-scoped permissions on this
+	// bucket, computed server-side. Omitted when access control is disabled.
+	EffectivePermissions []string `json:"effective_permissions,omitempty"`
 }
 
 // BucketWebsiteConfig represents website configuration for a bucket

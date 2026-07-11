@@ -5,6 +5,8 @@ import { useState, useMemo } from 'react';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { BreadcrumbItem } from '@/components/ui/breadcrumb';
+import { usePermissions } from '@/hooks/usePermissions';
+import { NoAccess } from '@/pages/NoAccess';
 
 function useCrumbs(): BreadcrumbItem[] {
   const location = useLocation();
@@ -35,6 +37,7 @@ function useCrumbs(): BreadcrumbItem[] {
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const crumbs = useCrumbs();
+  const { noAccess } = usePermissions();
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)]">
@@ -59,7 +62,7 @@ export function Layout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar crumbs={crumbs} />
         <main className="flex-1 overflow-y-auto scrollbar-thin">
-          <Outlet />
+          {noAccess ? <NoAccess /> : <Outlet />}
         </main>
       </div>
     </div>

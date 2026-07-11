@@ -5,19 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useBuckets } from '@/hooks/useApi';
+import { useBucketCan } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 
 interface TabSpec {
   to: string;
   label: string;
   end?: boolean;
+  perms?: string[];
 }
 
 const tabs: TabSpec[] = [
-  { to: 'objects', label: 'Objects' },
-  { to: 'permissions', label: 'Permissions' },
-  { to: 'website', label: 'Website' },
-  { to: 'settings', label: 'Settings' },
+  { to: 'objects', label: 'Objects', perms: ['object.list'] },
+  { to: 'permissions', label: 'Permissions', perms: ['permission.allow_bucket_key', 'permission.deny_bucket_key'] },
+  { to: 'website', label: 'Website', perms: ['bucket.update'] },
+  { to: 'settings', label: 'Settings', perms: ['bucket.update'] },
 ];
 
 function formatBytes(n?: number) {
@@ -36,6 +38,8 @@ export function BucketDetailShell() {
   const { bucketName = '' } = useParams<{ bucketName: string }>();
   const { data: buckets = [] } = useBuckets();
   const bucket = buckets.find((b) => b.name === bucketName);
+  const canBucket = useBucketCan();
+  const visibleTabs = tabs.filter((t) => !t.perms || t.perms.every((p) => canBucket(bucket, p)));
 
   const s3Url = `s3://${bucketName}`;
   const copyUrl = async () => {
@@ -68,16 +72,18 @@ export function BucketDetailShell() {
             <Button variant="secondary" onClick={copyUrl}>
               <Copy /> Copy URL
             </Button>
-            <Button variant="primary" onClick={() => document.dispatchEvent(new CustomEvent('bucket:upload'))}>
-              <Upload /> Upload
-            </Button>
+            {canBucket(bucket, 'object.write') && (
+              <Button variant="primary" onClick={() => document.dispatchEvent(new CustomEvent('bucket:upload'))}>
+                <Upload /> Upload
+              </Button>
+            )}
           </div>
         </div>
       </section>
 
       {/* Tabs */}
       <nav className="flex h-12 items-center gap-0 border-b border-[var(--border)] px-7">
-        {tabs.map((t) => (
+        {visibleTabs.map((t) => (
           <NavLink
             key={t.to}
             to={t.to}

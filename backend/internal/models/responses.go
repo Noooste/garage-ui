@@ -48,6 +48,10 @@ type BucketInfo struct {
 	WebsiteAccess bool                 `json:"websiteAccess"`
 	WebsiteConfig *BucketWebsiteConfig `json:"websiteConfig,omitempty"`
 	Quotas        *BucketQuotas        `json:"quotas,omitempty"`
+
+	// EffectivePermissions is the caller's prefix-scoped permissions on this
+	// bucket, computed server-side. Omitted when access control is disabled.
+	EffectivePermissions []string `json:"effective_permissions,omitempty"`
 }
 
 // BucketListResponse represents a list of buckets

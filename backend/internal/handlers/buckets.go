@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"Noooste/garage-ui/internal/authz"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 
@@ -78,6 +79,10 @@ func (h *BucketHandler) ListBuckets(c fiber.Ctx) error {
 		}
 
 		buckets = append(buckets, bucketInfo)
+	}
+
+	if subj, ok := authz.SubjectFrom(c); ok {
+		buckets = filterBucketsForSubject(buckets, subj)
 	}
 
 	response := models.BucketListResponse{
@@ -229,6 +234,10 @@ func (h *BucketHandler) GetBucketInfo(c fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(
 			models.ErrorResponse(models.ErrCodeBucketNotFound, "Bucket does not exist"),
 		)
+	}
+
+	if subj, ok := authz.SubjectFrom(c); ok {
+		bucketInfo.EffectivePermissions = authz.EffectivePermissions(subj, bucketName)
 	}
 
 	return c.JSON(models.SuccessResponse(bucketInfo))
@@ -490,4 +499,19 @@ func (h *BucketHandler) UpdateBucketQuotas(c fiber.Ctx) error {
 	}
 
 	return c.JSON(models.SuccessResponse(result))
+}
+
+// filterBucketsForSubject applies the access-control view of a bucket list:
+// a bucket is visible iff the subject holds bucket.list for it, and each
+// visible bucket carries the subject's effective permissions.
+func filterBucketsForSubject(buckets []models.BucketInfo, subj authz.Subject) []models.BucketInfo {
+	out := make([]models.BucketInfo, 0, len(buckets))
+	for _, b := range buckets {
+		if !authz.Decide(subj, authz.PermBucketList, authz.Resource{Bucket: b.Name}).Allow {
+			continue
+		}
+		b.EffectivePermissions = authz.EffectivePermissions(subj, b.Name)
+		out = append(out, b)
+	}
+	return out
 }

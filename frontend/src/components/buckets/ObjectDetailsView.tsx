@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { objectsApi } from '@/lib/api';
+import { useBuckets } from '@/hooks/useApi';
+import { useBucketCan } from '@/hooks/usePermissions';
 import type { ObjectMetadata } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +37,11 @@ export function ObjectDetailsView() {
   const navigate = useNavigate();
   const { bucketName, '*': encodedObjectKey } = useParams();
   const objectKey = encodedObjectKey ? decodeURIComponent(encodedObjectKey) : undefined;
+
+  const { data: buckets = [] } = useBuckets();
+  const bucket = buckets.find((b) => b.name === bucketName);
+  const canBucket = useBucketCan();
+  const canDelete = canBucket(bucket, 'object.delete');
 
   const [metadata, setMetadata] = useState<ObjectMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -161,9 +168,11 @@ export function ObjectDetailsView() {
           <Button variant="secondary" onClick={handleDownload}>
             <Download className="h-4 w-4" /> Download
           </Button>
-          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="h-4 w-4" /> Delete
-          </Button>
+          {canDelete && (
+            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
         </div>
       </section>
 

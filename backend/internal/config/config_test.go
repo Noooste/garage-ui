@@ -736,6 +736,133 @@ func TestLoad_FileBackedEnvVarMissingFileReturnsError(t *testing.T) {
 	}
 }
 
+func TestAccessControlConfigParsing(t *testing.T) {
+	resetViper(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	yaml := `
+server:
+  port: 8080
+garage:
+  endpoint: "http://localhost:3900"
+  admin_endpoint: "http://localhost:3903"
+  admin_token: "test-token"
+auth:
+  oidc:
+    enabled: false
+    team_attribute_path: "groups"
+access_control:
+  presets:
+    bucket_readonly: [bucket.list, bucket.read]
+  teams:
+    - name: backend
+      claim_values: ["garage-team-backend"]
+      bindings:
+        - bucket_prefixes: ["backend-"]
+          permissions: ["preset:bucket_readonly", "bucket.create"]
+      cluster_permissions: [cluster.status]
+`
+	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AccessControl == nil {
+		t.Fatal("AccessControl is nil, want parsed section")
+	}
+	if got := cfg.Auth.OIDC.TeamAttributePath; got != "groups" {
+		t.Errorf("TeamAttributePath = %q, want groups", got)
+	}
+	if len(cfg.AccessControl.Teams) != 1 {
+		t.Fatalf("teams = %d, want 1", len(cfg.AccessControl.Teams))
+	}
+	team := cfg.AccessControl.Teams[0]
+	if team.Name != "backend" || len(team.Bindings) != 1 {
+		t.Errorf("unexpected team: %+v", team)
+	}
+	if team.Bindings[0].BucketPrefixes[0] != "backend-" {
+		t.Errorf("prefix = %q", team.Bindings[0].BucketPrefixes[0])
+	}
+	if cfg.AccessControl.Presets["bucket_readonly"][0] != "bucket.list" {
+		t.Errorf("preset parse failed: %+v", cfg.AccessControl.Presets)
+	}
+}
+
+func TestAccessControlAbsentIsNil(t *testing.T) {
+	resetViper(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	yaml := `
+garage:
+  endpoint: "http://localhost:3900"
+  admin_endpoint: "http://localhost:3903"
+  admin_token: "test-token"
+`
+	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AccessControl != nil {
+		t.Fatalf("AccessControl = %+v, want nil when section absent", cfg.AccessControl)
+	}
+}
+
+func TestAccessControlPresentButEmptyIsNonNil(t *testing.T) {
+	// A present-but-empty access_control section pins the enablement
+	// semantics documented on AccessControlConfig: presence, not content,
+	// turns on default-deny. An operator who writes "access_control: {}"
+	// (e.g. while staging a config) must get a non-nil, enabled policy, not
+	// silently fall back to "every authenticated user is admin".
+	resetViper(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	yaml := `
+garage:
+  endpoint: "http://localhost:3900"
+  admin_endpoint: "http://localhost:3903"
+  admin_token: "test-token"
+access_control: {}
+`
+	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AccessControl == nil {
+		t.Fatal("AccessControl = nil, want non-nil when section is present but empty")
+	}
+	if len(cfg.AccessControl.Teams) != 0 {
+		t.Errorf("Teams = %+v, want empty", cfg.AccessControl.Teams)
+	}
+}
+
+func TestOIDCAdminRolesOptionalWithAccessControl(t *testing.T) {
+	// With access_control present, OIDC no longer requires admin_role:
+	// default-deny protects unmatched users.
+	cfg := &Config{
+		Server: ServerConfig{Port: 8080, RootURL: "https://ui.example.com"},
+		Garage: GarageConfig{Endpoint: "e", AdminEndpoint: "a", AdminToken: "t"},
+		Auth: AuthConfig{OIDC: OIDCConfig{
+			Enabled: true, ClientID: "id", IssuerURL: "https://idp", Scopes: []string{"openid"},
+		}},
+		AccessControl: &AccessControlConfig{},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate with access_control and no admin_role: %v, want nil", err)
+	}
+	cfg.AccessControl = nil
+	if err := cfg.Validate(); err == nil {
+		t.Error("Validate without access_control and no admin_role should fail")
+	}
+}
+
 func TestIsProduction(t *testing.T) {
 	tests := []struct {
 		env  string
