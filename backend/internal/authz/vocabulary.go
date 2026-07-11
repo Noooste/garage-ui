@@ -18,8 +18,8 @@ const (
 )
 
 // PermSpec describes one abstract permission. Endpoints lists the Garage admin
-// API endpoint names (or S3 data-plane operations) the permission maps to —
-// this registry is the only place those names appear in authz.
+// API endpoint names (or S3 data-plane operations) the permission maps to.
+// This registry is the only place those names appear in authz.
 type PermSpec struct {
 	Scope     ScopeKind
 	AdminOnly bool // not grantable to teams in v1; only the synthetic admin subject holds it
@@ -66,7 +66,7 @@ var Vocabulary = map[string]PermSpec{
 	"bucket_alias.add":    {Scope: ScopePrefix, Endpoints: []string{"AddBucketAlias"}},
 	"bucket_alias.remove": {Scope: ScopePrefix, Endpoints: []string{"RemoveBucketAlias"}},
 
-	// S3 data plane (object browser) — no Garage admin endpoint.
+	// S3 data plane (object browser), no Garage admin endpoint.
 	"object.list":   {Scope: ScopePrefix, Endpoints: []string{"S3:ListObjectsV2"}},
 	"object.read":   {Scope: ScopePrefix, Endpoints: []string{"S3:GetObject", "S3:HeadObject", "S3:PresignGet"}},
 	"object.write":  {Scope: ScopePrefix, Endpoints: []string{"S3:PutObject"}},
@@ -116,7 +116,7 @@ func IsValidPermission(p string) bool {
 
 // ExpandGlob expands a trailing-star pattern ("bucket.*", "cluster.layout.*",
 // bare "*") against the vocabulary. Admin-only permissions are never matched
-// by globs — they must be held via the synthetic admin subject. Returns nil
+// by globs; they must be held via the synthetic admin subject. Returns nil
 // when the pattern matches nothing or has no trailing star.
 func ExpandGlob(pattern string) []string {
 	if !strings.HasSuffix(pattern, "*") {

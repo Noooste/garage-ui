@@ -40,7 +40,7 @@ func TestExtractTeamsFromAccessToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Unsigned JWT with {"groups":["team-a","team-b"]} payload — extraction
+	// Unsigned JWT with {"groups":["team-a","team-b"]} payload. Extraction
 	// parses claims without verifying (token came from a verified exchange).
 	// header {"alg":"none"} / payload base64url of {"groups":["team-a","team-b"]}
 	tok := "eyJhbGciOiJub25lIn0.eyJncm91cHMiOlsidGVhbS1hIiwidGVhbS1iIl19.x"

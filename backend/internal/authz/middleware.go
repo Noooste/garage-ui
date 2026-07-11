@@ -86,8 +86,8 @@ func BucketFromBody() ScopeResolver {
 // resource. One structured decision log line is emitted per check: denies at
 // warn, allows at debug.
 //
-// The closure's function name is the marker VerifyRouteCoverage looks for —
-// do not wrap it in another anonymous function.
+// The closure's function name is the marker VerifyRouteCoverage looks for.
+// Do not wrap it in another anonymous function.
 func (m *Middleware) Require(scope ScopeResolver, perms ...string) fiber.Handler {
 	if len(perms) == 0 {
 		// A no-perms Require would silently no-op (allow everything) yet still
@@ -159,7 +159,7 @@ var coverageExemptPaths = map[string]struct{}{
 //
 // .Use()-registered routes need special handling. Group-level middleware
 // (api.Use(handler) on the "/api/v1" group) produces synthetic per-method
-// bookkeeping entries at exactly the bare prefix — those aren't endpoints and
+// bookkeeping entries at exactly the bare prefix. Those aren't endpoints and
 // are exempt. But a use-route at any deeper path (api.Use("/sneaky",
 // terminalHandler)) IS a reachable endpoint and gets the same fail-closed
 // treatment as normal routes.

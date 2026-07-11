@@ -42,7 +42,7 @@ func (policyAuthorizer) Decide(subj Subject, action string, res Resource) Decisi
 }
 
 // Decide is the pure decision function. The synthetic admin subject flows
-// through the same logic as any team — no IsAdmin shortcut.
+// through the same logic as any team, with no IsAdmin shortcut.
 func Decide(subj Subject, action string, res Resource) Decision {
 	spec, ok := Vocabulary[action]
 	if !ok {
@@ -104,7 +104,7 @@ func AdminSubject(id string) Subject {
 }
 
 // EffectivePermissions returns the sorted union of prefix-scoped permissions
-// the subject holds on the named bucket — the value served in API responses
+// the subject holds on the named bucket. This is the value served in API responses
 // so the frontend never does prefix matching. Returns nil when nothing
 // matches.
 func EffectivePermissions(subj Subject, bucket string) []string {

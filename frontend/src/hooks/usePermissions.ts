@@ -4,7 +4,7 @@ import { useCapabilities } from './useCapabilities';
  * Permission view derived from /api/v1/capabilities.
  *
  * Fail-closed: while capabilities are loading (or errored), every check
- * returns false — gated UI stays hidden until the server has spoken.
+ * returns false. Gated UI stays hidden until the server has spoken.
  * When access control is disabled server-side, every check returns true.
  */
 export function usePermissions() {
@@ -40,7 +40,7 @@ export function usePermissions() {
 
 /**
  * Per-bucket check against the server-computed effective_permissions carried
- * on bucket payloads. Does not know about loading/enabled state — it treats
+ * on bucket payloads. Does not know about loading/enabled state, so it treats
  * a missing effective_permissions field as "access control is disabled" and
  * allows. That's only correct when access control really is disabled, so
  * this is kept for internal use (by useBucketCan below); UI code should call

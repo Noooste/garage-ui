@@ -159,7 +159,7 @@ func TestWildcardObjectRoutes_EnforceAuthzViaGroupCascade(t *testing.T) {
 		t.Errorf("GET denied bucket: status = %d, want 403", code)
 	}
 
-	// DELETE requires object.delete, which the team does not hold — denied
+	// DELETE requires object.delete, which the team does not hold, so it is denied
 	// even on an in-scope bucket.
 	if code := do("DELETE", "/api/v1/buckets/allowed-data/objects/somekey"); code != 403 {
 		t.Errorf("DELETE allowed bucket without object.delete: status = %d, want 403", code)

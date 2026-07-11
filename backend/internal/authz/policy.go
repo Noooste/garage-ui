@@ -36,7 +36,7 @@ type Policy struct {
 const presetPrefix = "preset:"
 
 // CompilePolicy validates and compiles the access_control config section.
-// Any error here must abort startup — a half-valid policy is worse than none.
+// Any error here must abort startup; a half-valid policy is worse than none.
 func CompilePolicy(cfg *config.AccessControlConfig) (*Policy, error) {
 	if cfg == nil {
 		return &Policy{Enabled: false}, nil

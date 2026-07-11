@@ -110,7 +110,7 @@ func TestRequireDefaultDenyZeroTeamUser(t *testing.T) {
 func TestRequirePassthroughWhenDisabled(t *testing.T) {
 	policy, _ := CompilePolicy(nil)
 	m := NewMiddleware(policy, NewTeamResolver(policy, nil), NewAuthorizer())
-	// No userInfo at all — disabled access control must not require a subject.
+	// No userInfo at all. Disabled access control must not require a subject.
 	app := newTestApp(m, nil)
 	if code := doReq(t, app, "GET", "/api/v1/buckets/anything", ""); code != 200 {
 		t.Errorf("disabled: status %d, want 200", code)

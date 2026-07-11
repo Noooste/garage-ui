@@ -80,7 +80,7 @@ func TestAdminSubject(t *testing.T) {
 	if !a.IsAdmin {
 		t.Error("AdminSubject must set IsAdmin")
 	}
-	// Admin goes through the exact same Decide path — no shortcut.
+	// Admin goes through the exact same Decide path, no shortcut.
 	for _, action := range []string{"bucket.delete", "object.write", "key.create", "key.read_secret", "cluster.layout.apply", "node.repair"} {
 		if d := Decide(a, action, Resource{Bucket: "any-bucket-at-all"}); !d.Allow {
 			t.Errorf("admin denied %s: %s", action, d.Reason)

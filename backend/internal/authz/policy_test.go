@@ -121,7 +121,7 @@ func TestCompilePolicyValidationErrors(t *testing.T) {
 
 func TestTeamsForClaims(t *testing.T) {
 	cfg := validAC()
-	// Second team sharing a claim value with the first — union case from the issue.
+	// Second team sharing a claim value with the first: union case from the issue.
 	cfg.Teams = append(cfg.Teams, config.TeamConfig{
 		Name:               "backend-observers",
 		ClaimValues:        []string{"garage-team-backend"},
