@@ -3,6 +3,10 @@ import { objectsApi } from '@/lib/api';
 import type { S3Object, UploadTask } from '@/types';
 import { toast } from 'sonner';
 
+// How long to wait after the last keystroke before actually searching. Keeps
+// typing from firing a request (and a client-side re-filter) on every key.
+const SEARCH_DEBOUNCE_MS = 750;
+
 export function useBucketObjects(bucketName: string | null, currentPath: string = '', searchQuery: string = '', deepSearch: boolean = false) {
   const [objects, setObjects] = useState<S3Object[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,7 +89,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
 
   // Debounce the search query so we don't fire a recursive scan per keystroke.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [searchQuery]);
 
@@ -246,6 +250,9 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
 
   return {
     objects,
+    // The debounced query the current results reflect — use this (not the raw
+    // input) to filter/label results so the view waits instead of twitching.
+    debouncedSearch,
     isLoading,
     isRefreshing,
     isNavigating,

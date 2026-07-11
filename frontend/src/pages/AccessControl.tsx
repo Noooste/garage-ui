@@ -662,7 +662,7 @@ export function AccessControl() {
                 <div className="min-w-0 flex-1">
                   <DialogTitle>API key created</DialogTitle>
                   <DialogDescription>
-                    Copy your secret access key now — this is the only time it will be shown.
+                    Copy your secret access key now, this is the only time it will be shown.
                   </DialogDescription>
                 </div>
               </DialogHeader>
@@ -742,7 +742,7 @@ export function AccessControl() {
                     <div className="flex-1">
                       <div className="text-[13.5px] font-medium">Grant bucket permissions now</div>
                       <p className="mt-0.5 text-[12.5px] text-[var(--muted-foreground)]">
-                        Optional — you can also do this later from the key's edit menu.
+                        Optional, you can also do this later from the key's edit menu.
                       </p>
                     </div>
                   </label>

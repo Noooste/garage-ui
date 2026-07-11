@@ -15,6 +15,7 @@ interface ObjectBrowserViewProps {
   objects: S3Object[];
   currentPath: string;
   searchQuery: string;
+  filterQuery: string;
   deepSearch: boolean;
   isLoading?: boolean;
   isTruncated?: boolean;
@@ -43,6 +44,7 @@ export function ObjectBrowserView({
   objects,
   currentPath,
   searchQuery,
+  filterQuery,
   deepSearch,
   isLoading = false,
   isTruncated = false,
@@ -220,7 +222,7 @@ export function ObjectBrowserView({
               aria-pressed={deepSearch}
               title={
                 deepSearch
-                  ? 'Deep search: ON. Matches names anywhere and descends into subfolders. Scans the bucket — results may be partial on very large buckets. Click for fast prefix search.'
+                  ? 'Deep search: ON. Matches names anywhere and descends into subfolders. Scans the bucket, results may be partial on very large buckets. Click for fast prefix search.'
                   : 'Fast prefix search: matches the start of object names in this folder (like the AWS S3 / Cloudflare R2 console). Click to enable deep search (substring + subfolders).'
               }
               className="shrink-0"
@@ -373,6 +375,7 @@ export function ObjectBrowserView({
             objects={objects}
             currentPath={currentPath}
             searchQuery={searchQuery}
+            filterQuery={filterQuery}
             deepSearch={deepSearch}
             selectedFileKeys={selectedFileKeys}
             isDragActive={isDragActive}

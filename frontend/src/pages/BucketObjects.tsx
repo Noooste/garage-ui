@@ -28,6 +28,7 @@ export function BucketObjects() {
 
   const {
     objects,
+    debouncedSearch,
     isLoading,
     isRefreshing,
     isNavigating,
@@ -101,6 +102,7 @@ export function BucketObjects() {
         objects={objects}
         currentPath={currentPath}
         searchQuery={searchQuery}
+        filterQuery={debouncedSearch}
         deepSearch={deepSearch}
         isLoading={isLoading}
         isTruncated={isTruncated}
