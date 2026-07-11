@@ -151,6 +151,21 @@ func TestListObjects_SearchRoutesToSearchObjects(t *testing.T) {
 	}
 }
 
+func TestListObjects_SearchError500(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.SearchObjectsFn = func(_ context.Context, _, _, _ string) (*models.ObjectListResponse, error) {
+		return nil, errors.New("boom")
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects?search=target", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
 // --- GetObjectMetadata ---
 
 func TestGetObjectMetadata_Success(t *testing.T) {
