@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func TestExpandGlobRejectsNonGlob(t *testing.T) {
+	// A pattern without a trailing star is not a glob and expands to nothing.
+	if got := ExpandGlob("bucket.read"); got != nil {
+		t.Errorf("ExpandGlob(%q) = %v, want nil", "bucket.read", got)
+	}
+}
+
 func TestVocabularyContainsRatifiedPermissions(t *testing.T) {
 	// Spot-check one permission per family plus scope/admin flags.
 	cases := []struct {
