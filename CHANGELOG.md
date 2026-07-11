@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/Noooste/garage-ui/compare/v0.8.5...v0.9.0) (2026-07-11)
+
+
+### Features
+
+* **backend,frontend:** implement prefix and recursive substring search for bucket objects ([#89](https://github.com/Noooste/garage-ui/issues/89)) ([3098e47](https://github.com/Noooste/garage-ui/commit/3098e474f202f36b527c8636cd1d4e8c08e287d2))
+* **oidc:** add fine grained access control ([#91](https://github.com/Noooste/garage-ui/issues/91)) ([0d804fb](https://github.com/Noooste/garage-ui/commit/0d804fbd39ed656511b671d237ad14fc8c21786d))
+
 ## [0.8.5](https://github.com/Noooste/garage-ui/compare/v0.8.4...v0.8.5) (2026-07-03)
 
 
