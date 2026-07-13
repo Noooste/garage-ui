@@ -274,8 +274,8 @@ func TestS3_DeleteMultipleObjects_EmptyKeysIsNoop(t *testing.T) {
 	})
 	s3 := newS3TestService(t, h)
 
-	if err := s3.DeleteMultipleObjects(context.Background(), "whatever", nil); err != nil {
-		t.Fatalf("empty keys should return nil, got %v", err)
+	if n, err := s3.DeleteMultipleObjects(context.Background(), "whatever", nil); err != nil || n != 0 {
+		t.Fatalf("empty keys should return (0, nil), got (%d, %v)", n, err)
 	}
 	if called {
 		t.Error("S3 handler was invoked for empty-keys call")
@@ -289,9 +289,111 @@ func TestS3_DeleteMultipleObjects_ServerErrorPropagates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := s3.DeleteMultipleObjects(ctx, "b-TestS3_DeleteMultipleObjects_ServerErrorPropagates", []string{"a", "b"})
+	_, err := s3.DeleteMultipleObjects(ctx, "b-TestS3_DeleteMultipleObjects_ServerErrorPropagates", []string{"a", "b"})
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// s3PrefixDeleteHandler serves a ListObjectsV2 response (GET) from listBody and
+// a successful multi-object DeleteResult (POST /{bucket}?delete), recording how
+// many batch-delete requests were made.
+func s3PrefixDeleteHandler(listBody string, deletePosts *int) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			*deletePosts++
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?><DeleteResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"></DeleteResult>`)
+			return
+		}
+		// Any GET is treated as a ListObjectsV2 request.
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, listBody)
+	})
+}
+
+func TestS3_DeleteObjectsByPrefix_EmptyPrefixIsError(t *testing.T) {
+	// A blank prefix must be rejected before any network call — it would
+	// otherwise match (and delete) every object in the bucket.
+	called := false
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		s3ErrorXML(w, http.StatusInternalServerError, "ShouldNotHappen", "")
+	})
+	s3 := newS3TestService(t, h)
+
+	n, err := s3.DeleteObjectsByPrefix(context.Background(), "b-TestS3_DeleteObjectsByPrefix_EmptyPrefixIsError", "")
+	if err == nil {
+		t.Fatal("empty prefix should return an error")
+	}
+	if n != 0 {
+		t.Errorf("count = %d, want 0", n)
+	}
+	if called {
+		t.Error("no S3 request should be made for an empty prefix")
+	}
+}
+
+func TestS3_DeleteObjectsByPrefix_ListsThenDeletes(t *testing.T) {
+	contents := []struct {
+		Key          string
+		Size         int64
+		LastModified string
+		ETag         string
+	}{
+		{Key: "docs/a"}, {Key: "docs/b"}, {Key: "docs/sub/c"},
+	}
+	listBody := listBucketResultXML("b", false, "", contents, nil)
+	deletePosts := 0
+	s3 := newS3TestService(t, s3PrefixDeleteHandler(listBody, &deletePosts))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	n, err := s3.DeleteObjectsByPrefix(ctx, "b-TestS3_DeleteObjectsByPrefix_ListsThenDeletes", "docs/")
+	if err != nil {
+		t.Fatalf("DeleteObjectsByPrefix: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("deleted = %d, want 3 (all objects listed under the prefix)", n)
+	}
+	if deletePosts == 0 {
+		t.Error("expected a batch-delete request to be made")
+	}
+}
+
+func TestS3_DeleteObjectsByPrefix_NoObjectsReturnsZero(t *testing.T) {
+	listBody := listBucketResultXML("b", false, "", nil, nil)
+	deletePosts := 0
+	s3 := newS3TestService(t, s3PrefixDeleteHandler(listBody, &deletePosts))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	n, err := s3.DeleteObjectsByPrefix(ctx, "b-TestS3_DeleteObjectsByPrefix_NoObjectsReturnsZero", "empty/")
+	if err != nil {
+		t.Fatalf("DeleteObjectsByPrefix: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("deleted = %d, want 0", n)
+	}
+	if deletePosts != 0 {
+		t.Errorf("no batch-delete should be made when nothing matches, got %d", deletePosts)
+	}
+}
+
+func TestS3_DeleteObjectsByPrefix_ListErrorPropagates(t *testing.T) {
+	h, _ := errS3Handler(http.StatusForbidden, "AccessDenied")
+	s3 := newS3TestService(t, h)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, err := s3.DeleteObjectsByPrefix(ctx, "b-TestS3_DeleteObjectsByPrefix_ListErrorPropagates", "docs/")
+	if err == nil {
+		t.Fatal("expected the list error to propagate, got nil")
 	}
 }
 

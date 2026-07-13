@@ -115,7 +115,7 @@ func TestS3Mock_UnconfiguredMethodsReturnSentinel(t *testing.T) {
 	if _, err := m.GetPresignedURL(ctx, "b", "k", time.Minute); err == nil {
 		t.Error("GetPresignedURL: want error")
 	}
-	if err := m.DeleteMultipleObjects(ctx, "b", []string{"k"}); err == nil {
+	if _, err := m.DeleteMultipleObjects(ctx, "b", []string{"k"}); err == nil {
 		t.Error("DeleteMultipleObjects: want error")
 	}
 	// UploadMultipleObjects has no error channel; it must return a result slice
@@ -163,7 +163,7 @@ func TestS3Mock_ConfiguredFnsAreInvoked(t *testing.T) {
 		GetPresignedURLFn: func(_ context.Context, _, _ string, _ time.Duration) (string, error) {
 			return "http://x", nil
 		},
-		DeleteMultipleObjectsFn: func(_ context.Context, _ string, _ []string) error { return nil },
+		DeleteMultipleObjectsFn: func(_ context.Context, _ string, keys []string) (int, error) { return len(keys), nil },
 		UploadMultipleObjectsFn: func(_ context.Context, _ string, files []struct {
 			Key         string
 			Body        io.Reader
@@ -201,8 +201,8 @@ func TestS3Mock_ConfiguredFnsAreInvoked(t *testing.T) {
 	if u, err := m.GetPresignedURL(ctx, "b", "k", time.Minute); err != nil || u == "" {
 		t.Errorf("GetPresignedURL = (%q, %v)", u, err)
 	}
-	if err := m.DeleteMultipleObjects(ctx, "b", []string{"k"}); err != nil {
-		t.Errorf("DeleteMultipleObjects: %v", err)
+	if n, err := m.DeleteMultipleObjects(ctx, "b", []string{"k"}); err != nil || n != 1 {
+		t.Errorf("DeleteMultipleObjects = (%d, %v)", n, err)
 	}
 	results := m.UploadMultipleObjects(ctx, "b", []struct {
 		Key         string

@@ -519,11 +519,11 @@ func TestUploadObject_ServiceError500(t *testing.T) {
 
 func TestDeleteMultipleObjects_Success(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.DeleteMultipleObjectsFn = func(_ context.Context, bucket string, keys []string) error {
+	s3.DeleteMultipleObjectsFn = func(_ context.Context, bucket string, keys []string) (int, error) {
 		if bucket != "b1" || len(keys) != 3 {
 			t.Errorf("args = (%q, %v)", bucket, keys)
 		}
-		return nil
+		return len(keys), nil
 	}
 	body, _ := json.Marshal(map[string]any{"keys": []string{"a", "b", "c"}})
 	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
@@ -575,11 +575,11 @@ func TestDeleteMultipleObjects_Prefixes_Recursive(t *testing.T) {
 
 func TestDeleteMultipleObjects_KeysAndPrefixes(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.DeleteMultipleObjectsFn = func(_ context.Context, _ string, keys []string) error {
+	s3.DeleteMultipleObjectsFn = func(_ context.Context, _ string, keys []string) (int, error) {
 		if len(keys) != 2 {
 			t.Errorf("keys = %v", keys)
 		}
-		return nil
+		return len(keys), nil
 	}
 	s3.DeleteObjectsByPrefixFn = func(_ context.Context, _, _ string) (int, error) { return 3, nil }
 	body, _ := json.Marshal(map[string]any{"keys": []string{"a", "b"}, "prefixes": []string{"docs/"}})
@@ -635,6 +635,54 @@ func TestDeleteMultipleObjects_EmptyKeys400(t *testing.T) {
 	}
 }
 
+func TestDeleteMultipleObjects_BlankPrefix400(t *testing.T) {
+	// A blank/whitespace-only prefix must be rejected with a 4XX before any
+	// delete is attempted — it would otherwise target the whole bucket.
+	for _, prefix := range []string{"", "   "} {
+		app, s3 := newObjectsTestApp(t)
+		s3.DeleteObjectsByPrefixFn = func(_ context.Context, _, _ string) (int, error) {
+			t.Errorf("DeleteObjectsByPrefix must not be called for blank prefix %q", prefix)
+			return 0, nil
+		}
+		body, _ := json.Marshal(map[string]any{"prefixes": []string{prefix}})
+		req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("prefix %q: status = %d, want 400", prefix, resp.StatusCode)
+		}
+	}
+}
+
+func TestDeleteMultipleObjects_PrefixNormalizedToTrailingSlash(t *testing.T) {
+	// A prefix without a trailing slash must be normalized so it only deletes
+	// its own folder ("photos/2024/"), not siblings like "photos/2024-old/".
+	app, s3 := newObjectsTestApp(t)
+	var gotPrefix string
+	s3.DeleteObjectsByPrefixFn = func(_ context.Context, _, prefix string) (int, error) {
+		gotPrefix = prefix
+		return 1, nil
+	}
+	body, _ := json.Marshal(map[string]any{"prefixes": []string{"photos/2024"}})
+	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if gotPrefix != "photos/2024/" {
+		t.Errorf("prefix passed to service = %q, want %q", gotPrefix, "photos/2024/")
+	}
+}
+
 func TestDeleteMultipleObjects_MalformedJSON400(t *testing.T) {
 	app, _ := newObjectsTestApp(t)
 	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", strings.NewReader("{not-json"))
@@ -651,7 +699,7 @@ func TestDeleteMultipleObjects_MalformedJSON400(t *testing.T) {
 
 func TestDeleteMultipleObjects_ServiceError500(t *testing.T) {
 	app, s3 := newObjectsTestApp(t)
-	s3.DeleteMultipleObjectsFn = func(_ context.Context, _ string, _ []string) error { return errors.New("boom") }
+	s3.DeleteMultipleObjectsFn = func(_ context.Context, _ string, _ []string) (int, error) { return 0, errors.New("boom") }
 	body, _ := json.Marshal(map[string]any{"keys": []string{"a"}})
 	req := httptest.NewRequest(http.MethodPost, "/buckets/b1/objects/delete-multiple", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

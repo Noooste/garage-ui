@@ -539,20 +539,41 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 		)
 	}
 
+	// Validate and normalize folder prefixes before running an irreversible
+	// recursive delete on a public endpoint. A blank prefix would match the
+	// entire bucket, and a prefix without a trailing slash (e.g. "photos/2024")
+	// would also match sibling keys such as "photos/2024-old/...". Reject blanks
+	// with a 4XX and force a trailing slash so a prefix only ever deletes the
+	// objects inside its own folder.
+	prefixes := make([]string, 0, len(req.Prefixes))
+	for _, p := range req.Prefixes {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(
+				models.ErrorResponse(models.ErrCodeBadRequest, "Prefix must not be blank"),
+			)
+		}
+		if !strings.HasSuffix(trimmed, "/") {
+			trimmed += "/"
+		}
+		prefixes = append(prefixes, trimmed)
+	}
+
 	deleted := 0
 
 	// Delete the individually selected objects in a single batch call.
 	if len(req.Keys) > 0 {
-		if err := h.s3Service.DeleteMultipleObjects(ctx, bucketName, req.Keys); err != nil {
+		n, err := h.s3Service.DeleteMultipleObjects(ctx, bucketName, req.Keys)
+		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(
 				models.ErrorResponse(models.ErrCodeDeleteFailed, "Failed to delete objects: "+err.Error()),
 			)
 		}
-		deleted += len(req.Keys)
+		deleted += n
 	}
 
 	// Recursively delete every object under each selected folder prefix.
-	for _, prefix := range req.Prefixes {
+	for _, prefix := range prefixes {
 		n, err := h.s3Service.DeleteObjectsByPrefix(ctx, bucketName, prefix)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(
@@ -566,7 +587,7 @@ func (h *ObjectHandler) DeleteMultipleObjects(c fiber.Ctx) error {
 		Bucket:   bucketName,
 		Deleted:  deleted,
 		Keys:     req.Keys,
-		Prefixes: req.Prefixes,
+		Prefixes: prefixes,
 	}
 
 	return c.JSON(models.SuccessResponse(response))
