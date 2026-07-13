@@ -34,7 +34,9 @@ interface ObjectsTableProps {
   onDeleteFolder: (object: S3Object) => void;
   onToggleFileSelection: (key: string) => void;
   onToggleFolderSelection: (key: string) => void;
-  onSelectAll: () => void;
+  // Receives the keys of the currently *visible* (filtered) rows so selection
+  // stays aligned with what the search is actually showing.
+  onSelectAll: (fileKeys: string[], folderKeys: string[]) => void;
   onPageChange: (token?: string) => void;
   onItemsPerPageChange: (count: number) => void;
   initialPageToken?: string;
@@ -191,9 +193,16 @@ export function ObjectsTable({
               <Checkbox
                 checked={
                   filteredObjects.length > 0 &&
-                  selectedFileKeys.size + selectedFolderKeys.size === filteredObjects.length
+                  filteredObjects.every(obj =>
+                    obj.isFolder ? selectedFolderKeys.has(obj.key) : selectedFileKeys.has(obj.key),
+                  )
                 }
-                onCheckedChange={onSelectAll}
+                onCheckedChange={() =>
+                  onSelectAll(
+                    filteredObjects.filter(obj => !obj.isFolder).map(obj => obj.key),
+                    filteredObjects.filter(obj => obj.isFolder).map(obj => obj.key),
+                  )
+                }
                 aria-label="Select all objects"
               />
             </TableHead>

@@ -149,18 +149,30 @@ export function ObjectBrowserView({
     setSelectedFolderKeys(prev => toggleInSet(prev, key));
   };
 
-  const handleSelectAll = () => {
-    const fileKeys = objects.filter(obj => !obj.isFolder).map(obj => obj.key);
-    const folderKeys = objects.filter(obj => obj.isFolder).map(obj => obj.key);
-    const allSelected =
-      objects.length > 0 && selectedFileKeys.size + selectedFolderKeys.size === objects.length;
+  // Select/deselect the currently visible (filtered) rows. The table passes the
+  // keys it is actually showing so this stays aligned with the search filter
+  // instead of operating on the full, unfiltered object list.
+  const handleSelectAll = (fileKeys: string[], folderKeys: string[]) => {
+    const allVisibleSelected =
+      fileKeys.length + folderKeys.length > 0 &&
+      fileKeys.every(k => selectedFileKeys.has(k)) &&
+      folderKeys.every(k => selectedFolderKeys.has(k));
 
-    if (allSelected) {
-      setSelectedFileKeys(new Set());
-      setSelectedFolderKeys(new Set());
+    if (allVisibleSelected) {
+      // Drop only the visible rows, leaving any off-screen selection intact.
+      setSelectedFileKeys(prev => {
+        const next = new Set(prev);
+        fileKeys.forEach(k => next.delete(k));
+        return next;
+      });
+      setSelectedFolderKeys(prev => {
+        const next = new Set(prev);
+        folderKeys.forEach(k => next.delete(k));
+        return next;
+      });
     } else {
-      setSelectedFileKeys(new Set(fileKeys));
-      setSelectedFolderKeys(new Set(folderKeys));
+      setSelectedFileKeys(prev => new Set([...prev, ...fileKeys]));
+      setSelectedFolderKeys(prev => new Set([...prev, ...folderKeys]));
     }
   };
 
