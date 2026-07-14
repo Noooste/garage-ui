@@ -28,6 +28,7 @@ type S3Mock struct {
 	UploadObjectFn          func(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error)
 	CreateDirectoryMarkerFn func(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error)
 	GetObjectFn             func(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error)
+	GetObjectRangeFn        func(ctx context.Context, bucketName, key string, start, end int64) (io.ReadCloser, error)
 	ObjectExistsFn          func(ctx context.Context, bucketName, key string) (bool, error)
 	DeleteObjectFn          func(ctx context.Context, bucketName, key string) error
 	GetObjectMetadataFn     func(ctx context.Context, bucketName, key string) (*models.ObjectInfo, error)
@@ -86,6 +87,14 @@ func (m *S3Mock) GetObject(ctx context.Context, bucketName, key string) (io.Read
 		return nil, nil, s3NotConfigured("GetObject")
 	}
 	return m.GetObjectFn(ctx, bucketName, key)
+}
+
+func (m *S3Mock) GetObjectRange(ctx context.Context, bucketName, key string, start, end int64) (io.ReadCloser, error) {
+	m.record("GetObjectRange", bucketName, key)
+	if m.GetObjectRangeFn == nil {
+		return nil, s3NotConfigured("GetObjectRange")
+	}
+	return m.GetObjectRangeFn(ctx, bucketName, key, start, end)
 }
 
 func (m *S3Mock) ObjectExists(ctx context.Context, bucketName, key string) (bool, error) {

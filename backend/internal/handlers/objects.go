@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bufio"
 	"io"
 	"net/url"
 	"path"
@@ -68,15 +67,27 @@ func contentDispositionHeader(disposition, key string) string {
 	return disposition + "; filename=\"" + fallback + "\"; filename*=UTF-8''" + encoded
 }
 
+// PreviewTokenMinter mints signed single-object preview tokens.
+// auth.Service satisfies it.
+type PreviewTokenMinter interface {
+	MintPreviewToken(bucket, key string, ttl time.Duration) (string, time.Time, error)
+}
+
+// previewTokenTTL is long enough that seeking mid-playback keeps working.
+// The frontend mints a fresh URL when a token expires.
+const previewTokenTTL = time.Hour
+
 // ObjectHandler handles object-related HTTP requests.
 type ObjectHandler struct {
-	s3Service services.S3Storage
+	s3Service     services.S3Storage
+	previewTokens PreviewTokenMinter
 }
 
 // NewObjectHandler creates a new object handler.
-func NewObjectHandler(s3Service services.S3Storage) *ObjectHandler {
+func NewObjectHandler(s3Service services.S3Storage, previewTokens PreviewTokenMinter) *ObjectHandler {
 	return &ObjectHandler{
-		s3Service: s3Service,
+		s3Service:     s3Service,
+		previewTokens: previewTokens,
 	}
 }
 
@@ -277,12 +288,8 @@ func (h *ObjectHandler) CreateDirectory(c fiber.Ctx) error {
 //	@Failure		404			{object}	models.APIResponse{error=models.APIError}	"Object not found"
 //	@Router			/api/v1/buckets/{bucket}/objects/{key} [get]
 func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
-	ctx := c.Context()
-
-	// Get bucket name from URL parameters
 	bucketName := c.Params("bucket")
 
-	// Get object key from locals (set by route handler) or from params
 	key, ok := c.Locals("objectKey").(string)
 	if !ok || key == "" {
 		key = c.Params("key")
@@ -294,7 +301,17 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 		)
 	}
 
-	// Get object from Garage
+	// Range requests stream a partial body so media elements can seek.
+	if rangeHeader := c.Get("Range"); rangeHeader != "" {
+		return h.getObjectRange(c, bucketName, key, rangeHeader)
+	}
+	return h.serveFullObject(c, bucketName, key)
+}
+
+// serveFullObject streams the whole object with a 200, the pre-Range behavior.
+func (h *ObjectHandler) serveFullObject(c fiber.Ctx, bucketName, key string) error {
+	ctx := c.Context()
+
 	body, objectInfo, err := h.s3Service.GetObject(ctx, bucketName, key)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(
@@ -307,11 +324,12 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 	// cannot run as XSS in the SPA origin when fetched inline.
 	c.Set("Content-Type", safeContentType(objectInfo.ContentType))
 	c.Set("X-Content-Type-Options", "nosniff")
+	c.Set("Accept-Ranges", "bytes")
 	c.Set("Content-Length", strconv.FormatInt(objectInfo.Size, 10))
 	c.Set("ETag", objectInfo.ETag)
 	c.Set("Last-Modified", objectInfo.LastModified.Format(time.RFC1123))
 
-	// The object key is attacker-controlled — build the header via the safe
+	// The object key is attacker-controlled. Build the header via the safe
 	// RFC 6266 helper to avoid quote/semicolon injection into filename=.
 	disposition := "inline"
 	if c.Query("download") == "true" {
@@ -319,11 +337,60 @@ func (h *ObjectHandler) GetObject(c fiber.Ctx) error {
 	}
 	c.Set("Content-Disposition", contentDispositionHeader(disposition, key))
 
-	// Stream the object body to the client without buffering the entire file
-	return c.SendStreamWriter(func(w *bufio.Writer) {
-		defer body.Close()
-		io.Copy(w, body)
-	})
+	// SendStream (not SendStreamWriter) keeps the declared Content-Length: the
+	// streaming writer variant forces fasthttp into unknown-length chunked
+	// transfer, dropping the header we just set above.
+	return c.SendStream(body, int(objectInfo.Size))
+}
+
+// getObjectRange serves a single-range request with 206 Partial Content.
+// Malformed and multi-range headers fall back to the full 200 response.
+func (h *ObjectHandler) getObjectRange(c fiber.Ctx, bucketName, key, rangeHeader string) error {
+	ctx := c.Context()
+
+	info, err := h.s3Service.GetObjectMetadata(ctx, bucketName, key)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(
+			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
+		)
+	}
+
+	rng, unsatisfiable := parseRangeHeader(rangeHeader, info.Size)
+	if unsatisfiable {
+		c.Set("Accept-Ranges", "bytes")
+		c.Set("Content-Range", "bytes */"+strconv.FormatInt(info.Size, 10))
+		return c.SendStatus(fiber.StatusRequestedRangeNotSatisfiable)
+	}
+	if rng == nil {
+		return h.serveFullObject(c, bucketName, key)
+	}
+
+	body, err := h.s3Service.GetObjectRange(ctx, bucketName, key, rng.start, rng.end)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(
+			models.ErrorResponse(models.ErrCodeObjectNotFound, "Object not found: "+err.Error()),
+		)
+	}
+
+	c.Set("Content-Type", safeContentType(info.ContentType))
+	c.Set("X-Content-Type-Options", "nosniff")
+	c.Set("Accept-Ranges", "bytes")
+	c.Set("Content-Length", strconv.FormatInt(rng.end-rng.start+1, 10))
+	c.Set("Content-Range", "bytes "+strconv.FormatInt(rng.start, 10)+"-"+strconv.FormatInt(rng.end, 10)+"/"+strconv.FormatInt(info.Size, 10))
+	c.Set("ETag", info.ETag)
+	c.Set("Last-Modified", info.LastModified.Format(time.RFC1123))
+
+	disposition := "inline"
+	if c.Query("download") == "true" {
+		disposition = "attachment"
+	}
+	c.Set("Content-Disposition", contentDispositionHeader(disposition, key))
+
+	c.Status(fiber.StatusPartialContent)
+	// SendStream (not SendStreamWriter) keeps the declared Content-Length: the
+	// streaming writer variant forces fasthttp into unknown-length chunked
+	// transfer, dropping the header we just set above.
+	return c.SendStream(body, int(rng.end-rng.start+1))
 }
 
 // DeleteObject deletes an object from a bucket
@@ -428,6 +495,7 @@ func (h *ObjectHandler) GetObjectMetadata(c fiber.Ctx) error {
 		)
 	}
 
+	c.Set("Accept-Ranges", "bytes")
 	return c.JSON(models.SuccessResponse(metadata))
 }
 
@@ -510,6 +578,48 @@ func (h *ObjectHandler) GetPresignedURL(c fiber.Ctx) error {
 	}
 
 	return c.JSON(models.SuccessResponse(response))
+}
+
+// GetPreviewURL mints a short-lived tokenized URL for streaming this object
+//
+//	@Summary		Get a tokenized preview URL for an object
+//	@Description	Returns a relative URL carrying a short-lived token that authorizes streaming this object. Media elements cannot send an Authorization header, so the token rides in the URL instead.
+//	@Tags			Objects
+//	@Produce		json
+//	@Param			bucket	path		string												true	"Name of the bucket containing the object"
+//	@Param			key		path		string												true	"Key (path) of the object"
+//	@Success		200		{object}	models.APIResponse{data=models.PreviewURLResponse}	"Preview URL minted"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}			"Bucket name and object key are required"
+//	@Failure		500		{object}	models.APIResponse{error=models.APIError}			"Failed to mint the preview token"
+//	@Router			/api/v1/buckets/{bucket}/objects/{key}/preview-url [get]
+func (h *ObjectHandler) GetPreviewURL(c fiber.Ctx) error {
+	bucketName := c.Params("bucket")
+
+	key, ok := c.Locals("objectKey").(string)
+	if !ok || key == "" {
+		key = c.Params("key")
+	}
+
+	if bucketName == "" || key == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "Bucket name and object key are required"),
+		)
+	}
+
+	token, expiresAt, err := h.previewTokens.MintPreviewToken(bucketName, key, previewTokenTTL)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			models.ErrorResponse(models.ErrCodeInternalError, "Failed to mint the preview token: "+err.Error()),
+		)
+	}
+
+	previewURL := "/api/v1/buckets/" + url.PathEscape(bucketName) +
+		"/objects/" + url.PathEscape(key) + "?pt=" + url.QueryEscape(token)
+
+	return c.JSON(models.SuccessResponse(models.PreviewURLResponse{
+		URL:       previewURL,
+		ExpiresAt: expiresAt.UTC().Format(time.RFC3339),
+	}))
 }
 
 // DeleteMultipleObjects deletes multiple objects from a bucket

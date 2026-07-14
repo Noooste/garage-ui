@@ -103,6 +103,15 @@ func (m *Middleware) Require(scope ScopeResolver, perms ...string) fiber.Handler
 		if !m.enabled {
 			return c.Next()
 		}
+		// A validated preview token authorizes exactly one thing: object.read
+		// on the object it names. The auth middleware set these claims after
+		// verifying the signature and the bucket and key match this request.
+		if claims, ok := c.Locals(auth.PreviewTokenLocalsKey).(*auth.PreviewClaims); ok && claims != nil {
+			if len(perms) == 1 && perms[0] == PermObjectRead && scope(c).Bucket == claims.Bucket {
+				logDecision(c, "preview-token", PermObjectRead, claims.Bucket, true, "preview_token")
+				return c.Next()
+			}
+		}
 		subj, ok := SubjectFrom(c)
 		if !ok {
 			logDecision(c, "", strings.Join(perms, ","), "", false, "no_subject")

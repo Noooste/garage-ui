@@ -393,6 +393,12 @@ export const objectsApi = {
     });
     return response.data.data.url;
   },
+
+  getPreviewUrl: async (bucket: string, key: string): Promise<{ url: string; expiresAt: string }> => {
+    const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}/preview-url`);
+    const data = response.data.data;
+    return { url: data.url, expiresAt: data.expires_at };
+  },
 };
 
 // Access Control API (Users/Keys)

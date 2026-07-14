@@ -150,6 +150,11 @@ type PresignedURLResponse struct {
 	Key       string `json:"key"`
 }
 
+type PreviewURLResponse struct {
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expires_at"`
+}
+
 type ObjectDeleteMultipleResponse struct {
 	Bucket  string   `json:"bucket"`
 	Deleted int      `json:"deleted"`

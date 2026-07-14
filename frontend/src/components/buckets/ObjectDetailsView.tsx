@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { IconTile } from '@/components/ui/icon-tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ObjectPreview } from '@/components/buckets/ObjectPreview';
 import { ArrowLeft, ChevronRight, Copy, Download, File, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadObject, formatBytes } from '@/lib/file-utils';
@@ -42,6 +43,7 @@ export function ObjectDetailsView() {
   const bucket = buckets.find((b) => b.name === bucketName);
   const canBucket = useBucketCan();
   const canDelete = canBucket(bucket, 'object.delete');
+  const canRead = canBucket(bucket, 'object.read');
 
   const [metadata, setMetadata] = useState<ObjectMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -216,9 +218,19 @@ export function ObjectDetailsView() {
 
       {/* Preview */}
       <CardSection title="Preview">
-        <div className="px-5 py-10 text-center text-[13px] text-[var(--muted-foreground)]">
-          No preview available for this object.
-        </div>
+        {canRead && bucketName && objectKey ? (
+          <ObjectPreview
+            bucket={bucketName}
+            objectKey={objectKey}
+            size={metadata.size}
+            contentType={metadata.contentType}
+            onDownload={handleDownload}
+          />
+        ) : (
+          <div className="px-5 py-10 text-center text-[13px] text-[var(--muted-foreground)]">
+            No preview available for this object.
+          </div>
+        )}
       </CardSection>
 
       <ConfirmDialog

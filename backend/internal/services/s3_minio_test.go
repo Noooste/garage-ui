@@ -567,3 +567,69 @@ func TestS3_UploadMultipleObjects_PerFileFailuresRecorded(t *testing.T) {
 		}
 	}
 }
+
+func TestGetObjectRange_SendsRangeHeaderAndStreamsBody(t *testing.T) {
+	bucket := uniqueBucket2(t)
+	var gotRange string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRange = r.Header.Get("Range")
+		w.Header().Set("Content-Range", "bytes 2-6/10")
+		w.Header().Set("Content-Length", "5")
+		// The MinIO client parses Last-Modified from the response headers on
+		// the first Read, so the fake server must set a valid one.
+		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("23456"))
+	})
+	s3 := newS3TestService(t, handler)
+
+	body, err := s3.GetObjectRange(context.Background(), bucket, "file.bin", 2, 6)
+	if err != nil {
+		t.Fatalf("GetObjectRange: %v", err)
+	}
+	defer body.Close()
+	data, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if string(data) != "23456" {
+		t.Errorf("body = %q, want %q", data, "23456")
+	}
+	if gotRange != "bytes=2-6" {
+		t.Errorf("Range header = %q, want %q", gotRange, "bytes=2-6")
+	}
+}
+
+func TestGetObjectRange_InvalidRangeRejectedLocally(t *testing.T) {
+	bucket := uniqueBucket2(t)
+	var called bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	})
+	s3 := newS3TestService(t, handler)
+
+	// end before start is a caller bug; SetRange rejects it before any request.
+	if _, err := s3.GetObjectRange(context.Background(), bucket, "file.bin", 6, 2); err == nil {
+		t.Fatal("expected error for inverted range")
+	}
+	if called {
+		t.Error("no S3 request should be sent for an invalid range")
+	}
+}
+
+func TestGetObjectRange_ClientAcquisitionFailurePropagates(t *testing.T) {
+	bucket := uniqueBucket(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v2/GetBucketInfo", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"boom"}`))
+	})
+	s3, _ := adminBackedS3(t, mux)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if _, err := s3.GetObjectRange(ctx, bucket, "missing", 0, 4); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

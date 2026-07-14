@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -100,7 +102,7 @@ func newEnabledPolicyFixture(t *testing.T) (*routeFixture, string) {
 		svc,
 		handlers.NewHealthHandler("test"),
 		handlers.NewBucketHandler(admin, s3),
-		handlers.NewObjectHandler(s3),
+		handlers.NewObjectHandler(s3, svc),
 		handlers.NewUserHandler(admin),
 		handlers.NewClusterHandler(admin),
 		handlers.NewMonitoringHandler(admin, s3),
@@ -227,5 +229,74 @@ func TestListBuckets_HTTPFiltersByPolicyAndAddsEffectivePermissions(t *testing.T
 	}
 	if seen["denied-x"] {
 		t.Error("denied-x should not be visible to a team without bucket.list on that prefix")
+	}
+}
+
+// TestPreviewTokenGrantsObjectGET exercises the full production chain: group
+// cascade AuthMiddleware accepts the token, ResolveSubject finds no user,
+// and Require allows via the preview claims instead of a subject.
+func TestPreviewTokenGrantsObjectGET(t *testing.T) {
+	f, _ := newEnabledPolicyFixture(t)
+
+	// The full-object body echoes the key the handler was actually asked to
+	// serve (the decoded c.Params("*")). Asserting the streamed body equals
+	// the exact key the token was minted for makes any future divergence
+	// between the validated key and the served key fail loudly here rather
+	// than hide behind a constant body.
+	const mintedKey = "media/clip.mp4"
+	f.S3.GetObjectFn = func(_ context.Context, _, key string) (io.ReadCloser, *models.ObjectInfo, error) {
+		return io.NopCloser(strings.NewReader(key)), &models.ObjectInfo{Key: key, Size: int64(len(key)), ContentType: "video/mp4", LastModified: time.Now()}, nil
+	}
+	f.S3.GetObjectMetadataFn = func(_ context.Context, _, key string) (*models.ObjectInfo, error) {
+		return &models.ObjectInfo{Key: key, Size: 5, ContentType: "video/mp4", LastModified: time.Now()}, nil
+	}
+	f.S3.GetObjectRangeFn = func(_ context.Context, _, _ string, start, end int64) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader("ell")), nil
+	}
+
+	token, _, err := f.Auth.MintPreviewToken("allowed-data", mintedKey, time.Minute)
+	if err != nil {
+		t.Fatalf("MintPreviewToken: %v", err)
+	}
+	tokenized := "/api/v1/buckets/allowed-data/objects/media%2Fclip.mp4?pt=" + url.QueryEscape(token)
+
+	// No Authorization header anywhere in this test.
+	do := func(method, path, rangeHeader string) *http.Response {
+		t.Helper()
+		req := httptest.NewRequest(method, path, nil)
+		if rangeHeader != "" {
+			req.Header.Set("Range", rangeHeader)
+		}
+		resp, err := f.App.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test(%s %s): %v", method, path, err)
+		}
+		return resp
+	}
+
+	resp := do("GET", tokenized, "")
+	if resp.StatusCode != 200 {
+		t.Fatalf("tokenized GET: status = %d, want 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != mintedKey {
+		t.Errorf("served key = %q, want %q (validated key must equal served key)", body, mintedKey)
+	}
+
+	// Seeking works through the same token.
+	resp = do("GET", tokenized, "bytes=1-3")
+	if resp.StatusCode != 206 {
+		t.Errorf("tokenized ranged GET: status = %d, want 206", resp.StatusCode)
+	}
+
+	// The token never opens the JSON subroutes or other objects.
+	if resp := do("GET", "/api/v1/buckets/allowed-data/objects/media%2Fclip.mp4%2Fmetadata?pt="+url.QueryEscape(token), ""); resp.StatusCode != 401 {
+		t.Errorf("metadata with token: status = %d, want 401", resp.StatusCode)
+	}
+	if resp := do("GET", "/api/v1/buckets/allowed-data/objects/other.mp4?pt="+url.QueryEscape(token), ""); resp.StatusCode != 401 {
+		t.Errorf("other object with token: status = %d, want 401", resp.StatusCode)
+	}
+	if resp := do("GET", "/api/v1/buckets/allowed-data/objects/media%2Fclip.mp4", ""); resp.StatusCode != 401 {
+		t.Errorf("no token, no auth: status = %d, want 401", resp.StatusCode)
 	}
 }

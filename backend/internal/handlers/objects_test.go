@@ -20,23 +20,42 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+// mintStub satisfies PreviewTokenMinter for handler tests.
+type mintStub struct {
+	fn func(bucket, key string, ttl time.Duration) (string, time.Time, error)
+}
+
+func (m *mintStub) MintPreviewToken(bucket, key string, ttl time.Duration) (string, time.Time, error) {
+	if m.fn == nil {
+		return "test-token", time.Now().Add(ttl), nil
+	}
+	return m.fn(bucket, key, ttl)
+}
+
 func newObjectsTestApp(t *testing.T) (*fiber.App, *mocks.S3Mock) {
+	app, s3, _ := newObjectsTestAppWithMinter(t)
+	return app, s3
+}
+
+func newObjectsTestAppWithMinter(t *testing.T) (*fiber.App, *mocks.S3Mock, *mintStub) {
 	t.Helper()
 	s3 := &mocks.S3Mock{}
-	h := NewObjectHandler(s3)
+	minter := &mintStub{}
+	h := NewObjectHandler(s3, minter)
 	app := fiber.New()
 	app.Get("/buckets/:bucket/objects", h.ListObjects)
 	app.Post("/buckets/:bucket/objects", h.UploadObject)
 	app.Post("/buckets/:bucket/directories", h.CreateDirectory)
 	app.Post("/buckets/:bucket/objects/upload-multiple", h.UploadMultipleObjects)
 	app.Post("/buckets/:bucket/objects/delete-multiple", h.DeleteMultipleObjects)
-	// Wildcard endpoints — mount under :key for tests. Handlers prefer
+	// Wildcard endpoints. Mount under :key for tests. Handlers prefer
 	// c.Locals("objectKey") but fall back to c.Params("key"), so :key works.
 	app.Get("/buckets/:bucket/objects/:key", h.GetObject)
 	app.Get("/buckets/:bucket/objects/:key/metadata", h.GetObjectMetadata)
 	app.Get("/buckets/:bucket/objects/:key/presigned", h.GetPresignedURL)
+	app.Get("/buckets/:bucket/objects/:key/preview-url", h.GetPreviewURL)
 	app.Delete("/buckets/:bucket/objects/:key", h.DeleteObject)
-	return app, s3
+	return app, s3, minter
 }
 
 // --- ListObjects ---
@@ -340,6 +359,109 @@ func TestGetPresignedURL_ObjectMissing404(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// --- GetPreviewURL ---
+
+func TestGetPreviewURL_Success(t *testing.T) {
+	app, _, minter := newObjectsTestAppWithMinter(t)
+	fixed := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	minter.fn = func(bucket, key string, ttl time.Duration) (string, time.Time, error) {
+		if bucket != "b1" || key != "clip.mp4" {
+			t.Errorf("mint args = (%q, %q)", bucket, key)
+		}
+		if ttl != time.Hour {
+			t.Errorf("ttl = %v, want 1h", ttl)
+		}
+		return "tok123", fixed, nil
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/clip.mp4/preview-url", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var body struct {
+		Data models.PreviewURLResponse `json:"data"`
+	}
+	decodeJSON(t, resp.Body, &body)
+	if body.Data.URL != "/api/v1/buckets/b1/objects/clip.mp4?pt=tok123" {
+		t.Errorf("url = %q", body.Data.URL)
+	}
+	if body.Data.ExpiresAt != "2026-07-11T12:00:00Z" {
+		t.Errorf("expires_at = %q", body.Data.ExpiresAt)
+	}
+}
+
+func TestGetPreviewURL_EscapesKeyInURL(t *testing.T) {
+	// Production sets the decoded key in locals via the wildcard dispatcher,
+	// so mirror that here instead of relying on :key param decoding.
+	s3 := &mocks.S3Mock{}
+	minter := &mintStub{}
+	minter.fn = func(_, key string, _ time.Duration) (string, time.Time, error) {
+		if key != "dir/my file.mp4" {
+			t.Errorf("key = %q", key)
+		}
+		return "tok", time.Now().Add(time.Hour), nil
+	}
+	h := NewObjectHandler(s3, minter)
+	app := fiber.New()
+	app.Get("/buckets/:bucket/preview-url", func(c fiber.Ctx) error {
+		c.Locals("objectKey", "dir/my file.mp4")
+		return h.GetPreviewURL(c)
+	})
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/preview-url", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var body struct {
+		Data models.PreviewURLResponse `json:"data"`
+	}
+	decodeJSON(t, resp.Body, &body)
+	if !strings.HasPrefix(body.Data.URL, "/api/v1/buckets/b1/objects/dir%2Fmy%20file.mp4?pt=") {
+		t.Errorf("url = %q, want the key percent-encoded whole", body.Data.URL)
+	}
+}
+
+func TestGetPreviewURL_MissingBucketAndKey400(t *testing.T) {
+	// Mount on a route with no :bucket param and no objectKey local, so both
+	// bucket and key are empty and the handler short-circuits with 400.
+	s3 := &mocks.S3Mock{}
+	minter := &mintStub{}
+	h := NewObjectHandler(s3, minter)
+	app := fiber.New()
+	app.Get("/preview-url-nobucket", h.GetPreviewURL)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/preview-url-nobucket", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestGetPreviewURL_MintError500(t *testing.T) {
+	app, _, minter := newObjectsTestAppWithMinter(t)
+	minter.fn = func(_, _ string, _ time.Duration) (string, time.Time, error) {
+		return "", time.Time{}, errors.New("boom")
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/f/preview-url", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 
@@ -908,5 +1030,123 @@ func TestCreateDirectory_ServiceError500(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+// --- GetObject Range support ---
+
+func TestGetObject_NoRangeHeaderAdvertisesAcceptRanges(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.GetObjectFn = func(_ context.Context, _, key string) (io.ReadCloser, *models.ObjectInfo, error) {
+		return io.NopCloser(strings.NewReader("0123456789")), &models.ObjectInfo{Key: key, Size: 10, ContentType: "text/plain", LastModified: time.Now()}, nil
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/f.txt", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Accept-Ranges"); got != "bytes" {
+		t.Errorf("Accept-Ranges = %q, want %q", got, "bytes")
+	}
+}
+
+func TestGetObject_RangeRequestServes206(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	now := time.Now()
+	s3.GetObjectMetadataFn = func(_ context.Context, _, key string) (*models.ObjectInfo, error) {
+		return &models.ObjectInfo{Key: key, Size: 10, ContentType: "video/mp4", ETag: "e1", LastModified: now}, nil
+	}
+	s3.GetObjectRangeFn = func(_ context.Context, _, _ string, start, end int64) (io.ReadCloser, error) {
+		if start != 2 || end != 6 {
+			t.Errorf("range = %d-%d, want 2-6", start, end)
+		}
+		return io.NopCloser(strings.NewReader("23456")), nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/clip.mp4", nil)
+	req.Header.Set("Range", "bytes=2-6")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("status = %d, want 206", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Range"); got != "bytes 2-6/10" {
+		t.Errorf("Content-Range = %q, want %q", got, "bytes 2-6/10")
+	}
+	if got := resp.Header.Get("Content-Length"); got != "5" {
+		t.Errorf("Content-Length = %q, want %q", got, "5")
+	}
+	if got := resp.Header.Get("Accept-Ranges"); got != "bytes" {
+		t.Errorf("Accept-Ranges = %q, want %q", got, "bytes")
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "23456" {
+		t.Errorf("body = %q, want %q", body, "23456")
+	}
+}
+
+func TestGetObject_UnsatisfiableRangeServes416(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.GetObjectMetadataFn = func(_ context.Context, _, key string) (*models.ObjectInfo, error) {
+		return &models.ObjectInfo{Key: key, Size: 10}, nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/f.bin", nil)
+	req.Header.Set("Range", "bytes=50-")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
+		t.Fatalf("status = %d, want 416", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Range"); got != "bytes */10" {
+		t.Errorf("Content-Range = %q, want %q", got, "bytes */10")
+	}
+}
+
+func TestGetObject_MultiRangeFallsBackToFullResponse(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.GetObjectMetadataFn = func(_ context.Context, _, key string) (*models.ObjectInfo, error) {
+		return &models.ObjectInfo{Key: key, Size: 10}, nil
+	}
+	s3.GetObjectFn = func(_ context.Context, _, key string) (io.ReadCloser, *models.ObjectInfo, error) {
+		return io.NopCloser(strings.NewReader("0123456789")), &models.ObjectInfo{Key: key, Size: 10, LastModified: time.Now()}, nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/f.bin", nil)
+	req.Header.Set("Range", "bytes=0-1,3-4")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "0123456789" {
+		t.Errorf("body = %q, want the full object", body)
+	}
+}
+
+func TestGetObject_RangeForMissingObjectIs404(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.GetObjectMetadataFn = func(_ context.Context, _, _ string) (*models.ObjectInfo, error) {
+		return nil, errors.New("no such key")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/gone.bin", nil)
+	req.Header.Set("Range", "bytes=0-5")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
 }

@@ -113,6 +113,9 @@ func SetupRoutes(
 		case strings.HasSuffix(path, "/presign"):
 			c.Locals("objectKey", strings.TrimSuffix(path, "/presign"))
 			return objectHandler.GetPresignedURL(c)
+		case strings.HasSuffix(path, "/preview-url"):
+			c.Locals("objectKey", strings.TrimSuffix(path, "/preview-url"))
+			return objectHandler.GetPreviewURL(c)
 		default:
 			c.Locals("objectKey", path)
 			return objectHandler.GetObject(c)

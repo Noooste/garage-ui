@@ -66,5 +66,7 @@ config.yaml
 docs/**/*.md
 !docs/garage-setup.md
 !docs/access-control.md
+**/state**
+**/content**
 
 **/worktrees

@@ -217,6 +217,56 @@ func TestRequireZeroPermissionsPanics(t *testing.T) {
 	m.Require(ScopeNone)
 }
 
+func newPreviewClaimsApp(m *Middleware, claims *auth.PreviewClaims) *fiber.App {
+	app := fiber.New()
+	app.Use(func(c fiber.Ctx) error { // stand-in for AuthMiddleware validating a preview token
+		if claims != nil {
+			c.Locals(auth.PreviewTokenLocalsKey, claims)
+		}
+		return c.Next()
+	})
+	app.Use(m.ResolveSubject())
+	app.Get("/api/v1/buckets/:bucket/objects/*", m.Require(BucketFromParam("bucket"), PermObjectRead), func(c fiber.Ctx) error {
+		return c.SendString("bytes")
+	})
+	app.Delete("/api/v1/buckets/:bucket/objects/*", m.Require(BucketFromParam("bucket"), PermObjectDelete), func(c fiber.Ctx) error {
+		return c.SendString("deleted")
+	})
+	return app
+}
+
+func TestRequirePreviewTokenBypass(t *testing.T) {
+	m := middlewareFixture(t)
+
+	t.Run("matching bucket allows object read without a subject", func(t *testing.T) {
+		app := newPreviewClaimsApp(m, &auth.PreviewClaims{Bucket: "any-bucket", Key: "k"})
+		if code := doReq(t, app, "GET", "/api/v1/buckets/any-bucket/objects/k", ""); code != 200 {
+			t.Errorf("status = %d, want 200", code)
+		}
+	})
+
+	t.Run("bucket mismatch denies", func(t *testing.T) {
+		app := newPreviewClaimsApp(m, &auth.PreviewClaims{Bucket: "bucket-a", Key: "k"})
+		if code := doReq(t, app, "GET", "/api/v1/buckets/bucket-b/objects/k", ""); code != 403 {
+			t.Errorf("status = %d, want 403", code)
+		}
+	})
+
+	t.Run("other permissions stay denied", func(t *testing.T) {
+		app := newPreviewClaimsApp(m, &auth.PreviewClaims{Bucket: "any-bucket", Key: "k"})
+		if code := doReq(t, app, "DELETE", "/api/v1/buckets/any-bucket/objects/k", ""); code != 403 {
+			t.Errorf("status = %d, want 403", code)
+		}
+	})
+
+	t.Run("no claims still requires a subject", func(t *testing.T) {
+		app := newPreviewClaimsApp(m, nil)
+		if code := doReq(t, app, "GET", "/api/v1/buckets/any-bucket/objects/k", ""); code != 403 {
+			t.Errorf("status = %d, want 403", code)
+		}
+	})
+}
+
 func TestVerifyRouteCoverage_UseRegisteredEndpointFlagged(t *testing.T) {
 	// A .Use()-registered route at a DEEPER path under /api/v1 is a reachable
 	// endpoint (Fiber runs it for every method with that prefix); it must get

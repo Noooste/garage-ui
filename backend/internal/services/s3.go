@@ -524,6 +524,34 @@ func (s *S3Service) GetObject(ctx context.Context, bucketName, key string) (io.R
 	return object, objectInfo, nil
 }
 
+// GetObjectRange retrieves an inclusive byte range of an object. The caller
+// resolves the range against the object size beforehand, so this method does
+// not stat the object again.
+func (s *S3Service) GetObjectRange(ctx context.Context, bucketName, key string, start, end int64) (io.ReadCloser, error) {
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
+	}
+
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetRange(start, end); err != nil {
+		return nil, fmt.Errorf("invalid range %d-%d for object %s: %w", start, end, key, err)
+	}
+
+	var object *minio.Object
+	retryConfig := utils.DefaultRetryConfig()
+	err = utils.RetryWithBackoff(ctx, retryConfig, func() error {
+		var getErr error
+		object, getErr = client.GetObject(ctx, bucketName, key, opts)
+		return getErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object %s from bucket %s: %w", key, bucketName, err)
+	}
+
+	return object, nil
+}
+
 // DeleteObject deletes an object from a bucket
 func (s *S3Service) DeleteObject(ctx context.Context, bucketName, key string) error {
 	// Get bucket-specific MinIO client

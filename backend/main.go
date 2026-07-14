@@ -153,7 +153,7 @@ func main() {
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(version)
 	bucketHandler := handlers.NewBucketHandler(adminService, s3Service)
-	objectHandler := handlers.NewObjectHandler(s3Service)
+	objectHandler := handlers.NewObjectHandler(s3Service, authService)
 	userHandler := handlers.NewUserHandler(adminService)
 	clusterHandler := handlers.NewClusterHandler(adminService)
 	monitoringHandler := handlers.NewMonitoringHandler(adminService, s3Service)

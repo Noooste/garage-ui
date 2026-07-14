@@ -71,7 +71,7 @@ func newTestApp(t *testing.T, cfgMutator func(*config.Config)) *routeFixture {
 		svc,
 		handlers.NewHealthHandler("test"),
 		handlers.NewBucketHandler(admin, s3),
-		handlers.NewObjectHandler(s3),
+		handlers.NewObjectHandler(s3, svc),
 		handlers.NewUserHandler(admin),
 		handlers.NewClusterHandler(admin),
 		handlers.NewMonitoringHandler(admin, s3),
@@ -206,6 +206,7 @@ func TestRoutes_AllAPIRoutesRegistered(t *testing.T) {
 		{"GET", "/api/v1/buckets/b1/objects/folder/file.txt"},
 		{"GET", "/api/v1/buckets/b1/objects/folder/file.txt/metadata"},
 		{"GET", "/api/v1/buckets/b1/objects/folder/file.txt/presign"},
+		{"GET", "/api/v1/buckets/b1/objects/folder/file.txt/preview-url"},
 		{"DELETE", "/api/v1/buckets/b1/objects/folder/file.txt"},
 		{"HEAD", "/api/v1/buckets/b1/objects/folder/file.txt"},
 		// Users

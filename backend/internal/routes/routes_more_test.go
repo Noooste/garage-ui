@@ -103,6 +103,30 @@ func TestRoutes_ObjectWildcard_GET_PresignSuffixRoutesToPresigned(t *testing.T) 
 	}
 }
 
+func TestRoutes_ObjectWildcard_GET_PreviewURLSuffixRoutesToPreviewURL(t *testing.T) {
+	f := newNoAuthFixture(t)
+	req := plainReq(http.MethodGet, "/api/v1/buckets/b1/objects/sub/clip.mp4/preview-url", nil)
+	resp, err := f.App.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var body struct {
+		Data models.PreviewURLResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// The dispatch trims the /preview-url suffix, so the key becomes sub/clip.mp4,
+	// percent-encoded whole (slash to %2F) in the returned URL, with a pt token.
+	if !strings.Contains(body.Data.URL, "/api/v1/buckets/b1/objects/sub%2Fclip.mp4?pt=") {
+		t.Errorf("url = %q, want the whole-encoded key with a pt token", body.Data.URL)
+	}
+}
+
 func TestRoutes_ObjectWildcard_DELETE_RoutesToDeleteObject(t *testing.T) {
 	f := newNoAuthFixture(t)
 

@@ -52,6 +52,7 @@ type S3Storage interface {
 	UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error)
 	CreateDirectoryMarker(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error)
 	GetObject(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error)
+	GetObjectRange(ctx context.Context, bucketName, key string, start, end int64) (io.ReadCloser, error)
 	ObjectExists(ctx context.Context, bucketName, key string) (bool, error)
 	DeleteObject(ctx context.Context, bucketName, key string) error
 	GetObjectMetadata(ctx context.Context, bucketName, key string) (*models.ObjectInfo, error)
