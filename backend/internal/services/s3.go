@@ -11,6 +11,7 @@ import (
 
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+	logpkg "Noooste/garage-ui/pkg/logger"
 	"Noooste/garage-ui/pkg/utils"
 
 	"github.com/minio/minio-go/v7"
@@ -240,17 +241,10 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, err)
 	}
 
-	// Drop directory marker objects (zero-byte keys ending in "/"). Garage
-	// returns them in Contents, but the UI renders folders from Prefixes — a
-	// marker shown as both a folder and a file is confusing. Any marker not
-	// already covered by a CommonPrefix is promoted to Prefixes below.
 	contents := make([]minio.ObjectInfo, 0, len(result.Contents))
 	markerKeys := make([]string, 0)
 	for _, obj := range result.Contents {
 		if strings.HasSuffix(obj.Key, "/") && obj.Size == 0 {
-			// A marker whose key equals the current listing prefix is the
-			// folder itself — drop it entirely so it doesn't render as a
-			// nameless child of itself.
 			if obj.Key != prefix {
 				markerKeys = append(markerKeys, obj.Key)
 			}
@@ -328,6 +322,97 @@ func (s *S3Service) ListObjects(ctx context.Context, bucketName, prefix string, 
 		Count:                 len(objects),
 		IsTruncated:           result.IsTruncated,
 		NextContinuationToken: result.NextContinuationToken,
+	}, nil
+}
+
+const (
+	searchMaxScan    = 10000 // stop after scanning this many objects
+	searchMaxResults = 1000  // stop after collecting this many matches
+	searchPageSize   = 1000  // objects requested per ListObjectsV2 page
+)
+
+func objectMatchesSearch(key string, size int64, lowerQuery string) bool {
+	if strings.HasSuffix(key, "/") && size == 0 {
+		return false
+	}
+	return strings.Contains(strings.ToLower(key), lowerQuery)
+}
+
+// SearchObjects performs a recursive, best-effort substring search over object
+// keys under the given prefix.
+func (s *S3Service) SearchObjects(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error) {
+	client, err := s.getMinioClient(ctx, bucketName, OpRead)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MinIO client for bucket %s: %w", bucketName, err)
+	}
+
+	core := &minio.Core{Client: client}
+	lowerQuery := strings.ToLower(search)
+
+	matches := make([]models.ObjectInfo, 0, 64)
+	scanned := 0
+	truncated := false
+	token := ""
+
+scan:
+	for {
+		result, err := core.ListObjectsV2(
+			bucketName,
+			prefix,
+			"",
+			token,
+			"",
+			searchPageSize,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search objects in bucket %s: %w", bucketName, err)
+		}
+
+		for _, obj := range result.Contents {
+			scanned++
+			if objectMatchesSearch(obj.Key, obj.Size, lowerQuery) {
+				matches = append(matches, models.ObjectInfo{
+					Key:          obj.Key,
+					Size:         obj.Size,
+					LastModified: obj.LastModified,
+					ETag:         obj.ETag,
+					StorageClass: obj.StorageClass,
+				})
+				if len(matches) >= searchMaxResults {
+					truncated = true
+					break scan
+				}
+			}
+			if scanned >= searchMaxScan {
+				truncated = true
+				break scan
+			}
+		}
+
+		if !result.IsTruncated || result.NextContinuationToken == "" {
+			break
+		}
+		token = result.NextContinuationToken
+	}
+
+	if truncated {
+		logpkg.FromCtx(ctx).Warn().
+			Str("bucket", bucketName).
+			Str("prefix", prefix).
+			Int("scanned", scanned).
+			Int("matches", len(matches)).
+			Msg("search hit scan/result cap; results are partial")
+	}
+
+	return &models.ObjectListResponse{
+		Bucket:      bucketName,
+		Objects:     matches,
+		Prefixes:    []string{},
+		Count:       len(matches),
+		IsTruncated: truncated,
+		// Search returns all matches up to the cap in one response; there is no
+		// token-based pagination for search results.
+		NextContinuationToken: "",
 	}, nil
 }
 

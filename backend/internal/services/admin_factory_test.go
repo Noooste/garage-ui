@@ -89,3 +89,61 @@ func TestDetectVersion_Unreachable(t *testing.T) {
 		t.Fatal("expected error for unreachable server")
 	}
 }
+
+// Garage v2.x serves /v1/health too, so a transient failure of the /v2 probe
+// must not cause a permanent downgrade to the (broken on v2.x) v1 client.
+// Regression test for https://github.com/Noooste/garage-ui/issues/78
+func TestDetectVersion_V2_TransientProbeFailure(t *testing.T) {
+	var v2Hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/GetClusterHealth":
+			v2Hits++
+			if v2Hits < 3 { // fail the first two attempts, then recover
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"healthy"}`))
+		case "/v1/health": // v2.x still answers this
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"healthy"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.GarageConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
+	result, err := NewAdminService(cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.APIVersion != "v2" {
+		t.Fatalf("expected v2 after transient probe failure, got %s", result.APIVersion)
+	}
+}
+
+// A server that answers /v1/health but returns a server error (not 404) for
+// /v2/GetClusterHealth must NOT be detected as v1, because v2.x servers also
+// answer /v1/health. Falling through to v1 here is the issue #78 misdetection.
+func TestDetectVersion_DoesNotDowngradeOnV2ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/GetClusterHealth":
+			w.WriteHeader(http.StatusServiceUnavailable)
+		case "/v1/health":
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"healthy"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.GarageConfig{AdminEndpoint: srv.URL, AdminToken: "tok"}
+	result, err := NewAdminService(cfg, "")
+	if err == nil && result.APIVersion == "v1" {
+		t.Fatal("must not downgrade to v1 when /v2 returns a server error; v2.x also serves /v1/health")
+	}
+}

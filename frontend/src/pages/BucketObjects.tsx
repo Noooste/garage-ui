@@ -2,14 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ObjectBrowserView } from '@/components/buckets/ObjectBrowserView';
 import { useBucketObjects } from '@/hooks/useBucketObjects';
+import { useBuckets } from '@/hooks/useApi';
+import { useBucketCan } from '@/hooks/usePermissions';
 
 export function BucketObjects() {
   const { bucketName = '' } = useParams<{ bucketName: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const { data: buckets = [] } = useBuckets();
+  const bucket = buckets.find((b) => b.name === bucketName);
+  const canBucket = useBucketCan();
+  const canWrite = canBucket(bucket, 'object.write');
+  const canDelete = canBucket(bucket, 'object.delete');
+
   const [currentPath, setCurrentPath] = useState(searchParams.get('prefix') ?? '');
   const [searchQuery, setSearchQuery] = useState('');
+  const [deepSearch, setDeepSearch] = useState(false);
   const [initialPageToken, setInitialPageToken] = useState<string | undefined>(
     searchParams.get('page') ?? undefined,
   );
@@ -27,6 +36,7 @@ export function BucketObjects() {
 
   const {
     objects,
+    debouncedSearch,
     isLoading,
     isRefreshing,
     isNavigating,
@@ -40,10 +50,13 @@ export function BucketObjects() {
     deleteMultipleObjects,
     createDirectory,
     fetchObjects,
-  } = useBucketObjects(bucketName, currentPath);
+  } = useBucketObjects(bucketName, currentPath, searchQuery, deepSearch);
 
   const handleNavigateToFolder = (path: string) => {
     setCurrentPath(path);
+    // Navigating to a folder should show that folder's contents, not a stale
+    // filter carried over from the folder we came from.
+    setSearchQuery('');
     const next = new URLSearchParams();
     if (path) next.set('prefix', path);
     setSearchParams(next);
@@ -74,10 +87,12 @@ export function BucketObjects() {
   // CustomEvent bridge for the Upload button in BucketDetailShell hero.
   const uploadInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    const handler = () => uploadInputRef.current?.click();
+    const handler = () => {
+      if (canWrite) uploadInputRef.current?.click();
+    };
     document.addEventListener('bucket:upload', handler);
     return () => document.removeEventListener('bucket:upload', handler);
-  }, []);
+  }, [canWrite]);
 
   return (
     <>
@@ -97,18 +112,21 @@ export function BucketObjects() {
         objects={objects}
         currentPath={currentPath}
         searchQuery={searchQuery}
+        filterQuery={debouncedSearch}
+        deepSearch={deepSearch}
         isLoading={isLoading}
         isTruncated={isTruncated}
         nextContinuationToken={nextContinuationToken}
         itemsPerPage={itemsPerPage}
         onSearchChange={setSearchQuery}
+        onDeepSearchChange={setDeepSearch}
         onNavigateToFolder={handleNavigateToFolder}
         onBackToBuckets={handleBackToBuckets}
-        onUploadFiles={uploadFiles}
+        onUploadFiles={canWrite ? uploadFiles : undefined}
         uploadTasks={uploadTasks}
-        onDeleteObject={deleteObject}
-        onDeleteMultipleObjects={deleteMultipleObjects}
-        onCreateDirectory={createDirectory}
+        onDeleteObject={canDelete ? deleteObject : undefined}
+        onDeleteMultipleObjects={canDelete ? deleteMultipleObjects : undefined}
+        onCreateDirectory={canWrite ? createDirectory : undefined}
         onRefresh={handleRefresh}
         onPageChange={handlePageChange}
         onItemsPerPageChange={handleItemsPerPageChange}

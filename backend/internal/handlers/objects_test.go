@@ -120,6 +120,52 @@ func TestListObjects_ServiceError500(t *testing.T) {
 	}
 }
 
+func TestListObjects_SearchRoutesToSearchObjects(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	// Intentionally leave ListObjectsFn unset: if the handler wrongly falls
+	// through to a normal listing, the mock returns an error and this fails.
+	s3.SearchObjectsFn = func(_ context.Context, bucket, prefix, search string) (*models.ObjectListResponse, error) {
+		if bucket != "b1" || prefix != "docs/" || search != "target" {
+			t.Errorf("args = (%q, %q, %q)", bucket, prefix, search)
+		}
+		return &models.ObjectListResponse{
+			Bucket: bucket, Count: 1,
+			Objects: []models.ObjectInfo{{Key: "docs/target.pdf", Size: 20}},
+		}, nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "/buckets/b1/objects?prefix=docs/&search=target", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var body struct {
+		Data models.ObjectListResponse `json:"data"`
+	}
+	decodeJSON(t, resp.Body, &body)
+	if body.Data.Count != 1 || len(body.Data.Objects) != 1 || body.Data.Objects[0].Key != "docs/target.pdf" {
+		t.Errorf("unexpected search results: %+v", body.Data)
+	}
+}
+
+func TestListObjects_SearchError500(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.SearchObjectsFn = func(_ context.Context, _, _, _ string) (*models.ObjectListResponse, error) {
+		return nil, errors.New("boom")
+	}
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/objects?search=target", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
 // --- GetObjectMetadata ---
 
 func TestGetObjectMetadata_Success(t *testing.T) {

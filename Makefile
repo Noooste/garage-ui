@@ -154,3 +154,9 @@ test-cover:
 ## test-smoke: Run the docker compose smoke test (requires Docker + compose v2)
 test-smoke:
 	cd backend && go test -tags=smoke -timeout 10m ./tests/smoke/...
+
+docs:
+	@echo "Generating documentation..."
+	@mkdir -p docs
+	@echo "Documentation generated in the 'docs' directory."
+	swag init -g backend/cmd/garage-ui/main.go -o docs --parseDependency --parseInternal

@@ -30,6 +30,7 @@ A modern web interface to manage <a href="https://garagehq.deuxfleurs.fr/">Garag
 - **Access key management** - create keys, assign per-bucket permissions
 - **Cluster overview** - monitor node status, layout configuration, and storage usage
 - **Flexible authentication** - no auth, basic credentials, or OIDC (Keycloak, Authentik, etc.)
+- **Multi-user access control** - optional OIDC-team-based permissions, see [docs/access-control.md](docs/access-control.md)
 - **Easy deployment** - single Docker image or Helm chart, configure with one YAML file
 
 ## Quick Start
@@ -77,11 +78,17 @@ helm install garage-ui garage-ui/garage-ui \
   --set garage.adminToken=your-token
 ```
 
-Access at http://localhost:8080
+The chart creates a ClusterIP service on port 80. To try it out before setting up an ingress:
 
-### Quick Start with garage.toml
+```bash
+kubectl port-forward svc/garage-ui 8080:80
+```
 
-If you already have a running Garage instance, you can point Garage UI directly at your `garage.toml` -- no `config.yaml` needed:
+Then open http://localhost:8080
+
+### Reusing your garage.toml
+
+If you already have a running Garage instance, you can point Garage UI straight at your `garage.toml` and skip `config.yaml` entirely:
 
 ```bash
 ./garage-ui --garage-toml /etc/garage.toml
@@ -89,7 +96,7 @@ If you already have a running Garage instance, you can point Garage UI directly 
 
 Garage UI reads the S3 endpoint, admin endpoint, admin token, and S3 region straight from the TOML file. When no authentication method is explicitly configured, **token auth auto-enables**: the login page asks for the Garage admin token, giving you a login wall with zero extra config.
 
-**Bind address handling:** Wildcard addresses like `0.0.0.0` or `[::]` are converted to `127.0.0.1` so the UI can reach Garage on localhost. Inside containers this won't work -- override the endpoint explicitly with environment variables or a config file.
+**Bind address handling:** Wildcard addresses like `0.0.0.0` or `[::]` are converted to `127.0.0.1` so the UI can reach Garage on localhost. Inside a container this won't work, so override the endpoints explicitly with environment variables or a config file.
 
 **Docker:**
 
@@ -127,6 +134,16 @@ garage:
   region: "garage"
 ```
 
+Server bind host is configured by `server.host` (default: `::`). IPv6 literals like `::` and `::1` are supported.
+
+```yaml
+server:
+  host: "::" # IPv6 wildcard (dual-stack-preferred)
+  port: 8080
+```
+
+If your environment needs explicit IPv4-only binding, set `server.host: "0.0.0.0"`.
+
 See [config.example.yaml](config.example.yaml) for all options including authentication, CORS, and logging.
 
 ### Environment Variables
@@ -141,7 +158,7 @@ GARAGE_UI_GARAGE_ADMIN_TOKEN=your-token
 
 #### Loading sensitive values from files (`_FILE` suffix)
 
-For Docker/Kubernetes secret integration, sensitive env vars can be read from files instead of plain values. Set `{VAR}_FILE=/path/to/file` and garage-ui reads the file's contents (trailing CR/LF trimmed) as the value. If both `{VAR}` and `{VAR}_FILE` are set, `_FILE` wins and a warning is logged. A missing or unreadable file causes startup to fail.
+For Docker and Kubernetes secrets, sensitive env vars can be read from files instead of plain values. Set `{VAR}_FILE=/path/to/file` and garage-ui uses the file's contents (trailing CR/LF trimmed) as the value. If both `{VAR}` and `{VAR}_FILE` are set, `_FILE` wins and a warning is logged. A missing or unreadable file stops startup.
 
 Supported vars:
 
@@ -168,7 +185,7 @@ secrets:
     file: ./admin_password.txt
 ```
 
-This matches the convention used by the official Postgres and MySQL Docker images. Helm users do not need this — the chart already injects secrets via `existingSecret` references.
+This matches the convention used by the official Postgres and MySQL Docker images. Helm users don't need it; the chart already injects secrets via `existingSecret` references.
 
 ## Garage Configuration
 
@@ -223,49 +240,19 @@ logging:
 
 ## Roadmap
 
-Ideas being considered. Contributions welcome.
+Roughly ordered by value. Open an [issue](https://github.com/Noooste/garage-ui/issues) to push something up the list.
 
-**Object browser**
-- [ ] Inline preview (images, PDF, video, text/markdown, code)
-- [ ] Resumable multipart uploads with pause/resume
-- [ ] Folder uploads preserving prefix structure
-- [ ] Bulk actions (delete, copy prefix, download prefix as zip)
-- [ ] Command palette (Cmd-K) and keyboard navigation
-
-**Sharing**
-- [ ] Presigned download links with expiry + QR code
-- [ ] Presigned upload drop-zones ("send me a file" pages)
-
-**Buckets**
-- [ ] Bucket alias manager (global vs. user-scoped)
-- [ ] Quota editor with live usage bar
-- [ ] Lifecycle editor (expiration + abort-multipart)
-- [ ] CORS editor with built-in test request
-- [ ] Website config (index/error docs) with live link
-- [ ] Per-bucket usage graph over time
-
-**Access keys**
-- [ ] Permission matrix view (keys x buckets)
-- [ ] Key rotation helper
-- [ ] Copy-ready snippets per key (aws-cli, rclone, restic, s3cmd, mc, Terraform)
-
-**Cluster**
-- [X] Support Garage v1 to latest
-- [ ] Visual layout editor with staged vs. applied diff
-- [ ] Capacity planner / simulation
-- [ ] Rebalance progress and node health timeline
-- [ ] Worker/repair panel (trigger scrub, repair, rebalance)
-
-**Observability**
-- [ ] Dashboard with dedup/compression savings
-- [ ] Metrics explorer pulling from Garage `/metrics`
-- [ ] Admin audit log
-
-**Polish**
-- [ ] i18n (FR/EN)
-- [ ] Mobile-friendly object browser
-- [ ] First-run onboarding wizard
-- [ ] GitOps export (layout + buckets + keys as YAML)
+- [x] **Fine-grained access control**: OIDC teams with per-bucket-prefix permissions, see [docs/access-control.md](docs/access-control.md)
+- [x] **Object search**: recursive substring search across a bucket
+- [x] **Bucket quotas**: size and object count limits from bucket settings
+- [x] **Zero-config startup**: run straight from `garage.toml`, log in with the admin token
+- [x] **Broad compatibility**: Garage v1 through latest, IPv6-only networks, secrets from files
+- [ ] **Inline object preview**: images, video, PDF, and text without downloading ([#60](https://github.com/Noooste/garage-ui/issues/60))
+- [ ] **Presigned share links**: time-limited download links from the object browser
+- [ ] **Resumable uploads**: multipart uploads that survive a dropped connection
+- [ ] **Visual layout editor**: staged vs. applied diff before committing layout changes
+- [ ] **Admin audit log**: who changed what, building on access control
+- [ ] **Table and detail polish**: sortable columns, clearer node details ([#36](https://github.com/Noooste/garage-ui/issues/36), [#37](https://github.com/Noooste/garage-ui/issues/37))
 
 ## License
 
@@ -276,3 +263,7 @@ MIT - see [LICENSE](LICENSE)
 - [Issues](https://github.com/Noooste/garage-ui/issues)
 - [Contributing](CONTRIBUTING.md)
 - [Garage Docs](https://garagehq.deuxfleurs.fr/documentation/)
+
+---
+
+<p align="center">Made with ❤️ in France 🇫🇷</p>

@@ -5,6 +5,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useBuckets, useDeleteBucket, useUpdateBucketQuotas } from '@/hooks/useApi';
+import { useBucketCan } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -86,6 +87,7 @@ export function BucketSettings() {
   const bucket = buckets.find((b) => b.name === bucketName);
   const deleteMutation = useDeleteBucket();
   const updateQuotasMutation = useUpdateBucketQuotas();
+  const canBucket = useBucketCan();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -295,25 +297,27 @@ export function BucketSettings() {
       </section>
 
       {/* Danger zone */}
-      <section className="rounded-xl border border-[var(--danger-border)] bg-[var(--card)]">
-        <header className="border-b border-[var(--danger-border)] px-5 py-3">
-          <h2 className="text-[15px] font-semibold text-[var(--destructive)]">Danger zone</h2>
-          <p className="mt-0.5 text-[13.5px] text-[var(--muted-foreground)]">
-            Destructive actions for this bucket.
-          </p>
-        </header>
-        <div className="flex items-center justify-between gap-4 px-5 py-4">
-          <div className="min-w-0">
-            <div className="text-[14px] font-medium">Delete bucket</div>
-            <div className="text-[13.5px] text-[var(--muted-foreground)]">
-              All objects in this bucket will be permanently removed.
+      {canBucket(bucket, 'bucket.delete') && (
+        <section className="rounded-xl border border-[var(--danger-border)] bg-[var(--card)]">
+          <header className="border-b border-[var(--danger-border)] px-5 py-3">
+            <h2 className="text-[15px] font-semibold text-[var(--destructive)]">Danger zone</h2>
+            <p className="mt-0.5 text-[13.5px] text-[var(--muted-foreground)]">
+              Destructive actions for this bucket.
+            </p>
+          </header>
+          <div className="flex items-center justify-between gap-4 px-5 py-4">
+            <div className="min-w-0">
+              <div className="text-[14px] font-medium">Delete bucket</div>
+              <div className="text-[13.5px] text-[var(--muted-foreground)]">
+                All objects in this bucket will be permanently removed.
+              </div>
             </div>
+            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+              Delete bucket
+            </Button>
           </div>
-          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-            Delete bucket
-          </Button>
-        </div>
-      </section>
+        </section>
+      )}
 
       <DangerousConfirmDialog
         open={deleteOpen}

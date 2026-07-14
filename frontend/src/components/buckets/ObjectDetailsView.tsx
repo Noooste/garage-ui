@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { objectsApi } from '@/lib/api';
+import { useBuckets } from '@/hooks/useApi';
+import { useBucketCan } from '@/hooks/usePermissions';
 import type { ObjectMetadata } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +10,7 @@ import { IconTile } from '@/components/ui/icon-tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ArrowLeft, ChevronRight, Copy, Download, File, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatBytes } from '@/lib/file-utils';
+import { downloadObject, formatBytes } from '@/lib/file-utils';
 import { formatDate } from '@/lib/utils';
 
 function CardSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -35,6 +37,11 @@ export function ObjectDetailsView() {
   const navigate = useNavigate();
   const { bucketName, '*': encodedObjectKey } = useParams();
   const objectKey = encodedObjectKey ? decodeURIComponent(encodedObjectKey) : undefined;
+
+  const { data: buckets = [] } = useBuckets();
+  const bucket = buckets.find((b) => b.name === bucketName);
+  const canBucket = useBucketCan();
+  const canDelete = canBucket(bucket, 'object.delete');
 
   const [metadata, setMetadata] = useState<ObjectMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,22 +80,9 @@ export function ObjectDetailsView() {
     toast.success(label);
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!bucketName || !objectKey) return;
-    try {
-      const blob = await objectsApi.get(bucketName, objectKey);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName || 'download';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success('Download started');
-    } catch {
-      // error toast handled by axios interceptor
-    }
+    downloadObject(bucketName, objectKey);
   };
 
   const handleDelete = async () => {
@@ -174,9 +168,11 @@ export function ObjectDetailsView() {
           <Button variant="secondary" onClick={handleDownload}>
             <Download className="h-4 w-4" /> Download
           </Button>
-          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-            <Trash2 className="h-4 w-4" /> Delete
-          </Button>
+          {canDelete && (
+            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
         </div>
       </section>
 

@@ -83,6 +83,9 @@ func TestLoad_EnvOnly_MissingFile(t *testing.T) {
 	if cfg.Server.Port != 9090 {
 		t.Errorf("Server.Port = %d, want 9090 (from env)", cfg.Server.Port)
 	}
+	if cfg.Server.Host != "::" {
+		t.Errorf("Server.Host = %q, want :: (default)", cfg.Server.Host)
+	}
 	if cfg.Garage.AdminToken != "env-token" {
 		t.Errorf("Garage.AdminToken = %q, want env-token", cfg.Garage.AdminToken)
 	}
@@ -327,6 +330,17 @@ func TestValidate(t *testing.T) {
 			wantErrContains: "",
 		},
 		{
+			name: "access_control teams without team_attribute_path rejected",
+			mutate: func(c *Config) {
+				applyValidOIDC(c)
+				c.Auth.OIDC.TeamAttributePath = ""
+				c.AccessControl = &AccessControlConfig{
+					Teams: []TeamConfig{{Name: "t", ClaimValues: []string{"g"}}},
+				}
+			},
+			wantErrContains: "team_attribute_path is required",
+		},
+		{
 			name: "oidc disabled ignores missing client_id",
 			mutate: func(c *Config) {
 				c.Auth.OIDC.Enabled = false
@@ -367,6 +381,8 @@ func TestGetAddress(t *testing.T) {
 	}{
 		{"localhost", 8080, "localhost:8080"},
 		{"0.0.0.0", 80, "0.0.0.0:80"},
+		{"::", 80, "[::]:80"},
+		{"::1", 443, "[::1]:443"},
 		{"", 443, ":443"},
 	}
 	for _, tc := range tests {
@@ -482,6 +498,103 @@ func TestLoad_EnvOverridesToml(t *testing.T) {
 	}
 	if cfg.Garage.AdminToken != "env-wins" {
 		t.Errorf("AdminToken = %q, want env-wins (env overrides toml)", cfg.Garage.AdminToken)
+	}
+}
+
+// oidcValidYAML is a minimal configuration that enables OIDC and passes
+// Validate, but deliberately omits auth.oidc.cookie_name.
+const oidcValidYAML = `
+server:
+  host: "0.0.0.0"
+  port: 8080
+  root_url: "https://garage.example.com"
+garage:
+  endpoint: http://garage:3900
+  admin_endpoint: http://garage:3903
+  admin_token: supersecret
+auth:
+  oidc:
+    enabled: true
+    client_id: "garage-ui"
+    issuer_url: "https://idp.example.com/realms/main"
+    scopes:
+      - openid
+    admin_roles:
+      - "garage-ui-admin"
+`
+
+func TestLoad_OIDCCookieNameDefaultsWhenUnset(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, oidcValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	// An empty cookie name makes Fiber silently drop the session Set-Cookie
+	// (net/http rejects empty cookie names), which manifests as an OIDC login
+	// loop. A non-empty default prevents that footgun.
+	if cfg.Auth.OIDC.CookieName != "garage_session" {
+		t.Errorf("CookieName = %q, want garage_session (default)", cfg.Auth.OIDC.CookieName)
+	}
+}
+
+func TestLoad_OIDCCookieNameExplicitValueWins(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, oidcValidYAML+"    cookie_name: \"custom_session\"\n")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.OIDC.CookieName != "custom_session" {
+		t.Errorf("CookieName = %q, want custom_session (explicit override)", cfg.Auth.OIDC.CookieName)
+	}
+}
+
+func TestLoad_OIDCCookieDefaultsWhenUnset(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, oidcValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	// HTTPOnly must default to true: a session cookie readable from JavaScript
+	// is an XSS token-theft risk.
+	if !cfg.Auth.OIDC.CookieHTTPOnly {
+		t.Errorf("CookieHTTPOnly = false, want true (default)")
+	}
+	// SessionMaxAge must default to a positive value so the cookie's MaxAge
+	// agrees with the 24h JWT instead of becoming a session-only cookie.
+	if cfg.Auth.OIDC.SessionMaxAge != 86400 {
+		t.Errorf("SessionMaxAge = %d, want 86400 (default)", cfg.Auth.OIDC.SessionMaxAge)
+	}
+	if cfg.Auth.OIDC.CookieSameSite != "lax" {
+		t.Errorf("CookieSameSite = %q, want lax (default)", cfg.Auth.OIDC.CookieSameSite)
+	}
+}
+
+func TestLoad_OIDCCookieDefaultsCanBeOverridden(t *testing.T) {
+	resetViper(t)
+	yaml := oidcValidYAML +
+		"    cookie_http_only: false\n" +
+		"    session_max_age: 3600\n" +
+		"    cookie_same_site: \"strict\"\n"
+	path := writeConfigFile(t, yaml)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.OIDC.CookieHTTPOnly {
+		t.Errorf("CookieHTTPOnly = true, want false (explicit override)")
+	}
+	if cfg.Auth.OIDC.SessionMaxAge != 3600 {
+		t.Errorf("SessionMaxAge = %d, want 3600 (explicit override)", cfg.Auth.OIDC.SessionMaxAge)
+	}
+	if cfg.Auth.OIDC.CookieSameSite != "strict" {
+		t.Errorf("CookieSameSite = %q, want strict (explicit override)", cfg.Auth.OIDC.CookieSameSite)
 	}
 }
 
@@ -634,6 +747,133 @@ func TestLoad_FileBackedEnvVarMissingFileReturnsError(t *testing.T) {
 	}
 }
 
+func TestAccessControlConfigParsing(t *testing.T) {
+	resetViper(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	yaml := `
+server:
+  port: 8080
+garage:
+  endpoint: "http://localhost:3900"
+  admin_endpoint: "http://localhost:3903"
+  admin_token: "test-token"
+auth:
+  oidc:
+    enabled: false
+    team_attribute_path: "groups"
+access_control:
+  presets:
+    bucket_readonly: [bucket.list, bucket.read]
+  teams:
+    - name: backend
+      claim_values: ["garage-team-backend"]
+      bindings:
+        - bucket_prefixes: ["backend-"]
+          permissions: ["preset:bucket_readonly", "bucket.create"]
+      cluster_permissions: [cluster.status]
+`
+	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AccessControl == nil {
+		t.Fatal("AccessControl is nil, want parsed section")
+	}
+	if got := cfg.Auth.OIDC.TeamAttributePath; got != "groups" {
+		t.Errorf("TeamAttributePath = %q, want groups", got)
+	}
+	if len(cfg.AccessControl.Teams) != 1 {
+		t.Fatalf("teams = %d, want 1", len(cfg.AccessControl.Teams))
+	}
+	team := cfg.AccessControl.Teams[0]
+	if team.Name != "backend" || len(team.Bindings) != 1 {
+		t.Errorf("unexpected team: %+v", team)
+	}
+	if team.Bindings[0].BucketPrefixes[0] != "backend-" {
+		t.Errorf("prefix = %q", team.Bindings[0].BucketPrefixes[0])
+	}
+	if cfg.AccessControl.Presets["bucket_readonly"][0] != "bucket.list" {
+		t.Errorf("preset parse failed: %+v", cfg.AccessControl.Presets)
+	}
+}
+
+func TestAccessControlAbsentIsNil(t *testing.T) {
+	resetViper(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	yaml := `
+garage:
+  endpoint: "http://localhost:3900"
+  admin_endpoint: "http://localhost:3903"
+  admin_token: "test-token"
+`
+	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AccessControl != nil {
+		t.Fatalf("AccessControl = %+v, want nil when section absent", cfg.AccessControl)
+	}
+}
+
+func TestAccessControlPresentButEmptyIsNonNil(t *testing.T) {
+	// A present-but-empty access_control section pins the enablement
+	// semantics documented on AccessControlConfig: presence, not content,
+	// turns on default-deny. An operator who writes "access_control: {}"
+	// (e.g. while staging a config) must get a non-nil, enabled policy, not
+	// silently fall back to "every authenticated user is admin".
+	resetViper(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	yaml := `
+garage:
+  endpoint: "http://localhost:3900"
+  admin_endpoint: "http://localhost:3903"
+  admin_token: "test-token"
+access_control: {}
+`
+	if err := os.WriteFile(cfgFile, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(cfgFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AccessControl == nil {
+		t.Fatal("AccessControl = nil, want non-nil when section is present but empty")
+	}
+	if len(cfg.AccessControl.Teams) != 0 {
+		t.Errorf("Teams = %+v, want empty", cfg.AccessControl.Teams)
+	}
+}
+
+func TestOIDCAdminRolesOptionalWithAccessControl(t *testing.T) {
+	// With access_control present, OIDC no longer requires admin_role:
+	// default-deny protects unmatched users.
+	cfg := &Config{
+		Server: ServerConfig{Port: 8080, RootURL: "https://ui.example.com"},
+		Garage: GarageConfig{Endpoint: "e", AdminEndpoint: "a", AdminToken: "t"},
+		Auth: AuthConfig{OIDC: OIDCConfig{
+			Enabled: true, ClientID: "id", IssuerURL: "https://idp", Scopes: []string{"openid"},
+		}},
+		AccessControl: &AccessControlConfig{},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate with access_control and no admin_role: %v, want nil", err)
+	}
+	cfg.AccessControl = nil
+	if err := cfg.Validate(); err == nil {
+		t.Error("Validate without access_control and no admin_role should fail")
+	}
+}
+
 func TestIsProduction(t *testing.T) {
 	tests := []struct {
 		env  string
@@ -652,5 +892,51 @@ func TestIsProduction(t *testing.T) {
 				t.Errorf("IsProduction(%q) = %v, want %v", tc.env, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestLoad_MetricsPublic_DefaultsFalse(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.MetricsPublic {
+		t.Errorf("Auth.MetricsPublic = true, want false by default")
+	}
+}
+
+func TestLoad_MetricsPublic_YAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+auth:
+  metrics_public: true
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Auth.MetricsPublic {
+		t.Errorf("Auth.MetricsPublic = false, want true from YAML")
+	}
+}
+
+func TestLoad_MetricsPublic_EnvOverridesYAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+auth:
+  metrics_public: false
+`)
+	t.Setenv("GARAGE_UI_AUTH_METRICS_PUBLIC", "true")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Auth.MetricsPublic {
+		t.Errorf("Auth.MetricsPublic = false, want true (env should override YAML)")
 	}
 }

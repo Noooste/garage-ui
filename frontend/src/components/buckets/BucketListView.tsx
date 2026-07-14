@@ -12,6 +12,7 @@ import {
 import { FolderIcon, Globe, Loader2, MoreVertical, Search, Settings, Trash2 } from 'lucide-react';
 import { formatBytes } from '@/lib/file-utils';
 import { formatDate } from '@/lib/utils';
+import { useBucketCan } from '@/hooks/usePermissions';
 import type { Bucket } from '@/types';
 
 interface BucketListViewProps {
@@ -35,6 +36,7 @@ export function BucketListView({
   onDeleteBucket,
   onWebsiteSettings,
 }: BucketListViewProps) {
+  const canBucket = useBucketCan();
   const filteredBuckets = buckets.filter((bucket) =>
     bucket.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -118,31 +120,39 @@ export function BucketListView({
                           <FolderIcon className="h-4 w-4" />
                           View Objects
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenSettings(bucket);
-                        }}>
-                          <Settings className="h-4 w-4" />
-                          Settings
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => {
-                          e.stopPropagation();
-                          onWebsiteSettings(bucket);
-                        }}>
-                          <Globe className="h-4 w-4" />
-                          Website Settings
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteBucket(bucket);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
+                        {canBucket(bucket, 'bucket.update') && (
+                          <>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenSettings(bucket);
+                            }}>
+                              <Settings className="h-4 w-4" />
+                              Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              onWebsiteSettings(bucket);
+                            }}>
+                              <Globe className="h-4 w-4" />
+                              Website Settings
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        {canBucket(bucket, 'bucket.delete') && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteBucket(bucket);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

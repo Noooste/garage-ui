@@ -1,3 +1,27 @@
+import { objectsApi } from './api';
+import { toast } from 'sonner';
+
+/**
+ * Download an object from a bucket by fetching it as a blob and clicking a
+ * temporary anchor element. Errors are surfaced by the axios interceptor.
+ */
+export async function downloadObject(bucket: string, key: string): Promise<void> {
+  try {
+    const blob = await objectsApi.get(bucket, key);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = key.split('/').pop() || 'download';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    toast.success('Download started');
+  } catch {
+    // error toast handled by axios interceptor
+  }
+}
+
 /**
  * Get the file type based on file extension
  */

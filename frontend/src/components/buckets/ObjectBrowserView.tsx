@@ -7,7 +7,7 @@ import {CreateDirectoryDialog} from './CreateDirectoryDialog';
 import {DeleteObjectDialog} from './DeleteObjectDialog';
 import {ConfirmDialog} from '@/components/ui/confirm-dialog';
 import {UploadProgress} from './UploadProgress';
-import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, Search, Trash, Upload} from 'lucide-react';
+import {ArrowLeft, ChevronRight, FolderPlus, Home, RotateCwIcon, ScanSearch, Search, Trash, Upload} from 'lucide-react';
 import {getBreadcrumbs} from '@/lib/file-utils';
 import type {S3Object, UploadTask} from '@/types';
 
@@ -16,18 +16,21 @@ interface ObjectBrowserViewProps {
   objects: S3Object[];
   currentPath: string;
   searchQuery: string;
+  filterQuery: string;
+  deepSearch: boolean;
   isLoading?: boolean;
   isTruncated?: boolean;
   nextContinuationToken?: string;
   itemsPerPage: number;
   onSearchChange: (query: string) => void;
+  onDeepSearchChange: (enabled: boolean) => void;
   onNavigateToFolder: (path: string) => void;
   onBackToBuckets: () => void;
-  onUploadFiles: (files: File[]) => Promise<boolean>;
+  onUploadFiles?: (files: File[]) => Promise<boolean>;
   uploadTasks: UploadTask[];
-  onDeleteObject: (key: string) => Promise<boolean>;
-  onDeleteMultipleObjects: (keys: string[], prefixes?: string[]) => Promise<boolean>;
-  onCreateDirectory: (name: string) => Promise<boolean>;
+  onDeleteObject?: (key: string) => Promise<boolean>;
+  onDeleteMultipleObjects?: (keys: string[], prefixes?: string[]) => Promise<boolean>;
+  onCreateDirectory?: (name: string) => Promise<boolean>;
   onRefresh: () => Promise<void>;
   onPageChange: (token?: string) => void;
   onItemsPerPageChange: (count: number) => void;
@@ -42,11 +45,14 @@ export function ObjectBrowserView({
   objects,
   currentPath,
   searchQuery,
+  filterQuery,
+  deepSearch,
   isLoading = false,
   isTruncated = false,
   nextContinuationToken,
   itemsPerPage,
   onSearchChange,
+  onDeepSearchChange,
   onNavigateToFolder,
   onBackToBuckets,
   onUploadFiles,
@@ -74,6 +80,8 @@ export function ObjectBrowserView({
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: async (acceptedFiles, _fileRejections, event) => {
+      if (!onUploadFiles) return;
+
       // Get files with their full paths from DataTransferItems API
       const filesWithPaths: File[] = [];
 
@@ -100,6 +108,7 @@ export function ObjectBrowserView({
       setShowUploadZone(false);
     },
     noClick: true,
+    disabled: !onUploadFiles,
   });
 
   // Helper function to traverse file/directory tree
@@ -191,7 +200,7 @@ export function ObjectBrowserView({
   };
 
   const handleConfirmBulkDelete = async () => {
-    if (!pendingDelete) return;
+    if (!pendingDelete || !onDeleteMultipleObjects) return;
 
     setBulkDeleting(true);
     const success = await onDeleteMultipleObjects(pendingDelete.keys, pendingDelete.prefixes);
@@ -214,6 +223,7 @@ export function ObjectBrowserView({
   };
 
   const handleDeleteObject = async (key: string): Promise<boolean> => {
+    if (!onDeleteObject) return false;
     const success = await onDeleteObject(key);
     if (success) {
       setDeleteObjectDialogOpen(false);
@@ -223,6 +233,7 @@ export function ObjectBrowserView({
   };
 
   const uploadFiles = async (files: File[]) => {
+    if (!onUploadFiles) return;
     await onUploadFiles(files);
     setShowUploadZone(false);
   };
@@ -259,17 +270,34 @@ export function ObjectBrowserView({
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-full sm:max-w-xs">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search objects..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-8"
-            />
+          <div className="flex flex-1 items-center gap-2 max-w-full sm:max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={deepSearch ? 'Deep search names…' : 'Search by name prefix…'}
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Button
+              type="button"
+              variant={deepSearch ? 'primary' : 'secondary'}
+              onClick={() => onDeepSearchChange(!deepSearch)}
+              aria-pressed={deepSearch}
+              title={
+                deepSearch
+                  ? 'Deep search: ON. Matches names anywhere and descends into subfolders. Scans the bucket, results may be partial on very large buckets. Click for fast prefix search.'
+                  : 'Fast prefix search: matches the start of object names in this folder (like the AWS S3 / Cloudflare R2 console). Click to enable deep search (substring + subfolders).'
+              }
+              className="shrink-0"
+            >
+              <ScanSearch className="h-4 w-4" />
+              <span className="hidden sm:inline">Deep</span>
+            </Button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {selectedCount > 0 && (
+            {onDeleteMultipleObjects && selectedCount > 0 && (
               <Button
                 onClick={handleRequestBulkDelete}
                 title={`Delete ${selectedCount} selected item(s)`}
@@ -279,14 +307,18 @@ export function ObjectBrowserView({
                 Delete {selectedCount} item{selectedCount !== 1 ? 's' : ''}
               </Button>
             )}
-            <Button variant="secondary" onClick={() => setShowUploadZone(!showUploadZone)} className="flex-1 sm:flex-initial">
-              <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Upload</span>
-            </Button>
-            <Button onClick={() => setCreateDirDialogOpen(true)} className="flex-1 sm:flex-initial">
-              <FolderPlus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Directory</span>
-            </Button>
+            {onUploadFiles && (
+              <Button variant="secondary" onClick={() => setShowUploadZone(!showUploadZone)} className="flex-1 sm:flex-initial">
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">Upload</span>
+              </Button>
+            )}
+            {onCreateDirectory && (
+              <Button onClick={() => setCreateDirDialogOpen(true)} className="flex-1 sm:flex-initial">
+                <FolderPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add Directory</span>
+              </Button>
+            )}
             <Button variant="secondary" size="icon" onClick={onRefresh} title="Refresh" disabled={isRefreshing}>
               <RotateCwIcon className={`h-4 w-4 transition-transform duration-500 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
@@ -294,7 +326,7 @@ export function ObjectBrowserView({
         </div>
 
         {/* Upload Zone */}
-        {showUploadZone && uploadTasks.length === 0 && (
+        {onUploadFiles && showUploadZone && uploadTasks.length === 0 && (
           <div className="border rounded-lg p-6 bg-muted/30 space-y-4">
             <div className="flex gap-6">
               <div className="flex-shrink-0 flex items-center justify-center">
@@ -412,6 +444,8 @@ export function ObjectBrowserView({
             objects={objects}
             currentPath={currentPath}
             searchQuery={searchQuery}
+            filterQuery={filterQuery}
+            deepSearch={deepSearch}
             selectedFileKeys={selectedFileKeys}
             selectedFolderKeys={selectedFolderKeys}
             isDragActive={isDragActive}
@@ -420,11 +454,11 @@ export function ObjectBrowserView({
             nextContinuationToken={nextContinuationToken}
             itemsPerPage={itemsPerPage}
             onNavigateToFolder={onNavigateToFolder}
-            onDeleteObject={(obj) => {
+            onDeleteObject={onDeleteObject ? (obj) => {
               setSelectedObject(obj);
               setDeleteObjectDialogOpen(true);
-            }}
-            onDeleteFolder={(obj) => handleDeleteFolder(obj.key)}
+            } : undefined}
+            onDeleteFolder={onDeleteMultipleObjects ? (obj) => handleDeleteFolder(obj.key) : undefined}
             onToggleFileSelection={handleToggleFileSelection}
             onToggleFolderSelection={handleToggleFolderSelection}
             onSelectAll={handleSelectAll}
@@ -437,12 +471,14 @@ export function ObjectBrowserView({
       </div>
 
       {/* Create Directory Dialog */}
-      <CreateDirectoryDialog
-        open={createDirDialogOpen}
-        onOpenChange={setCreateDirDialogOpen}
-        currentPath={currentPath}
-        onCreateDirectory={onCreateDirectory}
-      />
+      {onCreateDirectory && (
+        <CreateDirectoryDialog
+          open={createDirDialogOpen}
+          onOpenChange={setCreateDirDialogOpen}
+          currentPath={currentPath}
+          onCreateDirectory={onCreateDirectory}
+        />
+      )}
 
       {/* Delete Object Dialog */}
       <DeleteObjectDialog

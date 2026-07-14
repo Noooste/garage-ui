@@ -36,7 +36,7 @@ extraObjects: []
 
 config:
   server:
-    host: "0.0.0.0"
+    host: "::"
     port: 8080
     environment: "production"
     domain: "garage-ui.example.com"
@@ -73,6 +73,14 @@ config:
     jwt_private_key_secret:
       name: ""
       key: "jwt-key.pem"
+
+    # Expose Prometheus metrics at top-level /metrics WITHOUT authentication.
+    # Required for Prometheus to scrape when auth (admin/token/oidc) is enabled,
+    # since scrapers do not send credentials. Pairs with serviceMonitor below.
+    # WARNING: exposes operational cluster telemetry (bucket counts, request
+    # rates, storage sizes) unauthenticated, with no object data or secrets. Restrict
+    # access with a NetworkPolicy / trusted scrape network.
+    metrics_public: false
 
     # Admin authentication (username/password)
     admin:
@@ -113,6 +121,11 @@ config:
       role_attribute_path: "resource_access.garage-ui.roles"
       admin_role: "admin"
       admin_roles: []
+      # Team-based access control (optional). OIDC claim (go-jmespath, same
+      # convention as role_attribute_path) listing the user's teams. Required
+      # only when config.access_control.teams is set; leave empty to disable.
+      # See config.access_control below and docs/access-control.md.
+      team_attribute_path: ""
       # TLS settings
       tls_skip_verify: false
       # Session settings
@@ -146,6 +159,21 @@ config:
     level: "info"
     # Options: json, text
     format: "json"
+
+  # access_control:
+  #   presets:
+  #     bucket_readonly: [bucket.list, bucket.read, object.list, object.read]
+  #     bucket_owner: ["preset:bucket_readonly", bucket.create, bucket.update,
+  #                    bucket.delete, object.write, object.delete]
+  #   teams:
+  #     - name: backend
+  #       claim_values: ["garage-team-backend"]   # matched against the team_attribute_path claim
+  #       bindings:
+  #         - bucket_prefixes: ["backend-"]
+  #           permissions: ["preset:bucket_owner"]
+  #         - bucket_prefixes: ["shared-"]
+  #           permissions: ["preset:bucket_readonly"]
+  #       cluster_permissions: [cluster.status, cluster.health]
 
 # Pod annotations
 podAnnotations: {}
@@ -216,7 +244,9 @@ readinessProbe:
 serviceMonitor:
   enabled: false
   interval: 30s
-  path: /api/v1/monitoring/metrics
+  # Scrape path. The default /metrics is served only when
+  # config.auth.metrics_public is true (required when authentication is enabled).
+  path: /metrics
   labels: {}
 
 # NetworkPolicy

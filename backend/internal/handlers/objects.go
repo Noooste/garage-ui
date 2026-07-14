@@ -20,13 +20,13 @@ import (
 // served from the same origin as the API, any uploader could otherwise plant
 // stored XSS by uploading a file with one of these Content-Types.
 var unsafeInlineContentTypes = map[string]struct{}{
-	"text/html":             {},
-	"application/xhtml+xml": {},
-	"image/svg+xml":         {},
-	"application/xml":       {},
-	"text/xml":              {},
+	"text/html":              {},
+	"application/xhtml+xml":  {},
+	"image/svg+xml":          {},
+	"application/xml":        {},
+	"text/xml":               {},
 	"application/javascript": {},
-	"text/javascript":       {},
+	"text/javascript":        {},
 }
 
 // safeContentType rewrites Content-Types that the browser would treat as
@@ -89,6 +89,7 @@ func NewObjectHandler(s3Service services.S3Storage) *ObjectHandler {
 //	@Produce		json
 //	@Param			bucket				path		string												true	"Name of the bucket to list objects from"
 //	@Param			prefix				query		string												false	"Filter objects by prefix"
+//	@Param			search				query		string												false	"Recursively search object keys under prefix by case-insensitive substring (best-effort; bypasses max_keys and continuation_token)"
 //	@Param			max_keys			query		int													false	"Maximum number of objects to return (default: 100)"
 //	@Param			continuation_token	query		string												false	"Token for pagination to retrieve next page of results"
 //	@Success		200					{object}	models.APIResponse{data=models.ObjectListResponse}	"Successfully retrieved list of objects and prefixes"
@@ -109,6 +110,21 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 
 	// Get query parameters for filtering and pagination
 	prefix := c.Query("prefix", "")
+
+	// Search mode: a recursive, best-effort substring search across the whole
+	// subtree under prefix. S3/Garage has no server-side substring search, so
+	// the backend scans and filters. This bypasses page-token pagination and
+	// max_keys, see S3Service.SearchObjects -> pagination is handled frontend side.
+	if search := c.Query("search", ""); search != "" {
+		results, err := h.s3Service.SearchObjects(ctx, bucketName, prefix, search)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(
+				models.ErrorResponse(models.ErrCodeListFailed, "Failed to search objects: "+err.Error()),
+			)
+		}
+		return c.JSON(models.SuccessResponse(results))
+	}
+
 	continuationToken := c.Query("continuation_token", "")
 
 	maxKeysStr := c.Query("max_keys", "100")

@@ -31,10 +31,12 @@ type StateData struct {
 }
 
 type SessionClaims struct {
-	Username string   `json:"username"`
-	Email    string   `json:"email"`
-	Name     string   `json:"name"`
-	Roles    []string `json:"roles"`
+	Username   string   `json:"username"`
+	Email      string   `json:"email"`
+	Name       string   `json:"name"`
+	Roles      []string `json:"roles"`
+	Teams      []string `json:"teams,omitempty"`
+	AuthMethod string   `json:"auth_method,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -160,10 +162,12 @@ func (j *JWTService) GenerateToken(userInfo *UserInfo, sessionMaxAge int) (strin
 	expiresAt := now.Add(time.Duration(sessionMaxAge) * time.Second)
 
 	claims := SessionClaims{
-		Username: userInfo.Username,
-		Email:    userInfo.Email,
-		Name:     userInfo.Name,
-		Roles:    userInfo.Roles,
+		Username:   userInfo.Username,
+		Email:      userInfo.Email,
+		Name:       userInfo.Name,
+		Roles:      userInfo.Roles,
+		Teams:      userInfo.Teams,
+		AuthMethod: userInfo.AuthMethod,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),

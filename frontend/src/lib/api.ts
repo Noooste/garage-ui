@@ -293,6 +293,39 @@ export const objectsApi = {
     };
   },
 
+  // Recursive, best-effort substring search across all objects under `prefix`.
+  // The backend scans and filters (S3/Garage has no server-side substring
+  // search), so this finds matches regardless of which page they'd be on.
+  search: async (bucket: string, query: string, prefix?: string): Promise<ObjectListResponse> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any = { search: query };
+    if (prefix) params.prefix = prefix;
+
+    const response = await api.get(`/v1/buckets/${bucket}/objects`, { params });
+    const data = response.data.data;
+
+    // Search returns a flat list of matching objects (no folders/prefixes).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const objects: S3Object[] = data.objects?.map((obj: any) => ({
+      key: obj.key,
+      size: obj.size,
+      lastModified: obj.last_modified,
+      etag: obj.etag,
+      contentType: obj.content_type,
+      storageClass: obj.storage_class,
+      isFolder: false,
+    })) || [];
+
+    return {
+      bucket: data.bucket,
+      objects,
+      prefixes: [],
+      count: data.count,
+      isTruncated: data.is_truncated || false,
+      nextContinuationToken: data.next_continuation_token,
+    };
+  },
+
   get: async (bucket: string, key: string): Promise<Blob> => {
     const response = await api.get(`/v1/buckets/${bucket}/objects/${encodeObjectKey(key)}`, {
       responseType: 'blob'

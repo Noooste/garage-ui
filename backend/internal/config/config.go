@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -12,11 +14,12 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server  ServerConfig  `mapstructure:"server"`
-	Garage  GarageConfig  `mapstructure:"garage"`
-	Auth    AuthConfig    `mapstructure:"auth"`
-	CORS    CORSConfig    `mapstructure:"cors"`
-	Logging LoggingConfig `mapstructure:"logging"`
+	Server        ServerConfig         `mapstructure:"server"`
+	Garage        GarageConfig         `mapstructure:"garage"`
+	Auth          AuthConfig           `mapstructure:"auth"`
+	CORS          CORSConfig           `mapstructure:"cors"`
+	Logging       LoggingConfig        `mapstructure:"logging"`
+	AccessControl *AccessControlConfig `mapstructure:"access_control"`
 }
 
 // ServerConfig contains server-related configuration
@@ -46,10 +49,11 @@ type GarageConfig struct {
 
 // AuthConfig contains authentication configuration
 type AuthConfig struct {
-	Admin      AdminAuthConfig `mapstructure:"admin"`
-	OIDC       OIDCConfig      `mapstructure:"oidc"`
-	Token      TokenAuthConfig `mapstructure:"token"`
-	JWTPrivKey string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
+	Admin         AdminAuthConfig `mapstructure:"admin"`
+	OIDC          OIDCConfig      `mapstructure:"oidc"`
+	Token         TokenAuthConfig `mapstructure:"token"`
+	JWTPrivKey    string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
+	MetricsPublic bool            `mapstructure:"metrics_public"`  // Expose Prometheus metrics at top-level /metrics without auth
 }
 
 // AdminAuthConfig contains admin authentication settings
@@ -79,6 +83,7 @@ type OIDCConfig struct {
 	UsernameAttribute string   `mapstructure:"username_attribute"`
 	NameAttribute     string   `mapstructure:"name_attribute"`
 	RoleAttributePath string   `mapstructure:"role_attribute_path"`
+	TeamAttributePath string   `mapstructure:"team_attribute_path"`
 	AdminRole         string   `mapstructure:"admin_role"`
 	AdminRoles        []string `mapstructure:"admin_roles"`
 	TLSSkipVerify     bool     `mapstructure:"tls_skip_verify"`
@@ -128,6 +133,33 @@ type LoggingConfig struct {
 	Format string `mapstructure:"format"`
 }
 
+// AccessControlConfig is the optional access_control section. nil (section
+// absent) preserves historical behavior: every authenticated user is admin.
+// When present, authorization is default-deny and detailed policy validation
+// happens in internal/authz.CompilePolicy at startup.
+// This section is config-file only (no env-var binding: nested lists don't
+// map to flat env vars).
+type AccessControlConfig struct {
+	Presets map[string][]string `mapstructure:"presets"`
+	Teams   []TeamConfig        `mapstructure:"teams"`
+}
+
+// TeamConfig binds a set of IdP claim values to bucket-prefix bindings and
+// cluster-level permissions.
+type TeamConfig struct {
+	Name               string          `mapstructure:"name"`
+	ClaimValues        []string        `mapstructure:"claim_values"`
+	Bindings           []BindingConfig `mapstructure:"bindings"`
+	ClusterPermissions []string        `mapstructure:"cluster_permissions"`
+}
+
+// BindingConfig grants a set of permissions (or presets) over buckets whose
+// names match one of the given prefixes.
+type BindingConfig struct {
+	BucketPrefixes []string `mapstructure:"bucket_prefixes"`
+	Permissions    []string `mapstructure:"permissions"`
+}
+
 // LoadOption configures optional behaviour of Load.
 type LoadOption func(*loadOptions)
 
@@ -160,12 +192,16 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	viper.SetConfigType("yaml")
 
 	// Built-in defaults (lowest priority)
-	viper.SetDefault("server.host", "0.0.0.0")
+	viper.SetDefault("server.host", "::")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.environment", "production")
 	viper.SetDefault("garage.force_path_style", true)
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "text")
+	viper.SetDefault("auth.oidc.cookie_name", "garage_session")
+	viper.SetDefault("auth.oidc.cookie_http_only", true)
+	viper.SetDefault("auth.oidc.cookie_same_site", "lax")
+	viper.SetDefault("auth.oidc.session_max_age", 86400)
 
 	// If garage.toml path is provided, parse it and set values as viper
 	// defaults. Defaults sit below config-file and env-var values in viper's
@@ -210,6 +246,16 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 		return nil, fmt.Errorf("error unmarshaling config: %w", err)
 	}
 
+	// mapstructure leaves AccessControl nil when the section is present but
+	// decodes to an empty map (e.g. "access_control: {}"), even though
+	// viper.IsSet still reports it present. AccessControlConfig's documented
+	// semantics are presence-based, not content-based ("nil = absent =
+	// historical behavior"; "present, even empty = enabled default-deny"),
+	// so force allocation here rather than silently falling back to nil.
+	if cfg.AccessControl == nil && viper.IsSet("access_control") {
+		cfg.AccessControl = &AccessControlConfig{}
+	}
+
 	// Validate the configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -246,6 +292,7 @@ func bindEnvVars() {
 	viper.BindEnv("auth.admin.username", "GARAGE_UI_AUTH_ADMIN_USERNAME")
 	viper.BindEnv("auth.admin.password", "GARAGE_UI_AUTH_ADMIN_PASSWORD")
 	viper.BindEnv("auth.jwt_private_key", "GARAGE_UI_AUTH_JWT_PRIVATE_KEY")
+	viper.BindEnv("auth.metrics_public", "GARAGE_UI_AUTH_METRICS_PUBLIC")
 
 	// Token auth config
 	viper.BindEnv("auth.token.enabled", "GARAGE_UI_AUTH_TOKEN_ENABLED")
@@ -263,6 +310,7 @@ func bindEnvVars() {
 	viper.BindEnv("auth.oidc.username_attribute", "GARAGE_UI_AUTH_OIDC_USERNAME_ATTRIBUTE")
 	viper.BindEnv("auth.oidc.name_attribute", "GARAGE_UI_AUTH_OIDC_NAME_ATTRIBUTE")
 	viper.BindEnv("auth.oidc.role_attribute_path", "GARAGE_UI_AUTH_OIDC_ROLE_ATTRIBUTE_PATH")
+	viper.BindEnv("auth.oidc.team_attribute_path", "GARAGE_UI_AUTH_OIDC_TEAM_ATTRIBUTE_PATH")
 	viper.BindEnv("auth.oidc.admin_role", "GARAGE_UI_AUTH_OIDC_ADMIN_ROLE")
 	viper.BindEnv("auth.oidc.admin_roles", "GARAGE_UI_AUTH_OIDC_ADMIN_ROLES")
 	viper.BindEnv("auth.oidc.tls_skip_verify", "GARAGE_UI_AUTH_OIDC_TLS_SKIP_VERIFY")
@@ -368,13 +416,15 @@ func (c *Config) Validate() error {
 		if len(c.Auth.OIDC.Scopes) == 0 {
 			return fmt.Errorf("oidc scopes are required when oidc is enabled")
 		}
-		// Every authenticated route on this service grants full admin
-		// access — there is no separate authorization layer. Empty
-		// admin role configuration would therefore promote every user
-		// in the IdP realm to cluster admin. Require operators to opt
-		// in explicitly via admin_role or admin_roles.
-		if len(c.Auth.OIDC.EffectiveAdminRoles()) == 0 {
-			return fmt.Errorf("oidc admin_role or admin_roles is required when oidc is enabled: leaving them empty would grant cluster-admin access to any authenticated IdP user")
+		// With access_control configured, default-deny protects unmatched
+		// users, so admin roles become optional. Without it, every
+		// authenticated route grants full admin access, so an empty admin
+		// role list would promote every IdP user to cluster admin.
+		if c.AccessControl == nil && len(c.Auth.OIDC.EffectiveAdminRoles()) == 0 {
+			return fmt.Errorf("oidc admin_role or admin_roles is required when oidc is enabled without access_control: leaving them empty would grant cluster-admin access to any authenticated IdP user")
+		}
+		if c.AccessControl != nil && len(c.AccessControl.Teams) > 0 && c.Auth.OIDC.TeamAttributePath == "" {
+			return fmt.Errorf("auth.oidc.team_attribute_path is required when access_control.teams is set: teams cannot be resolved without it")
 		}
 	}
 
@@ -383,7 +433,7 @@ func (c *Config) Validate() error {
 
 // GetAddress returns the full server address (host:port)
 func (c *Config) GetAddress() string {
-	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+	return net.JoinHostPort(c.Server.Host, strconv.Itoa(c.Server.Port))
 }
 
 // IsDevelopment returns true if running in development mode

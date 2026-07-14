@@ -4,11 +4,13 @@ import { BookOpen, Database, Key, LayoutDashboard, Server } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { useQuery } from '@tanstack/react-query';
 import { healthApi, garageApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface NavItem {
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  visible?: (p: ReturnType<typeof usePermissions>) => boolean;
 }
 
 interface NavGroup {
@@ -22,13 +24,15 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'Storage',
-    items: [{ title: 'Buckets', href: '/buckets', icon: Database }],
+    items: [
+      { title: 'Buckets', href: '/buckets', icon: Database, visible: (p) => p.hasAnyPerm('bucket.list') },
+    ],
   },
   {
     label: 'Cluster',
     items: [
-      { title: 'Cluster', href: '/cluster', icon: Server },
-      { title: 'Access Control', href: '/access', icon: Key },
+      { title: 'Cluster', href: '/cluster', icon: Server, visible: (p) => p.hasAnyClusterAccess },
+      { title: 'Access Control', href: '/access', icon: Key, visible: (p) => p.hasClusterPerm('key.list') },
     ],
   },
 ];
@@ -41,6 +45,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const { config } = useAuthStore();
+  const perms = usePermissions();
 
   const { data: uiVersion } = useQuery({
     queryKey: ['ui-version'],
@@ -77,38 +82,42 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <span className="text-[18px] font-semibold tracking-tight">Garage UI</span>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin">
-        {navGroups.map((group, gi) => (
-          <div key={gi}>
-            {group.label && (
-              <div className="px-2 pb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-                {group.label}
-              </div>
-            )}
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.href);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      to={item.href}
-                      onClick={onClose}
-                      className={cn(
-                        'flex h-9 items-center gap-2 rounded-md px-2.5 text-[14px] transition-colors',
-                        active
-                          ? 'bg-[var(--primary)] font-medium text-[var(--primary-foreground)]'
-                          : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]',
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {item.title}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+        {navGroups.map((group, gi) => {
+          const visibleItems = group.items.filter((item) => !item.visible || item.visible(perms));
+          if (visibleItems.length === 0) return null;
+          return (
+            <div key={gi}>
+              {group.label && (
+                <div className="px-2 pb-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
+                  {group.label}
+                </div>
+              )}
+              <ul className="space-y-0.5">
+                {visibleItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.href);
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        to={item.href}
+                        onClick={onClose}
+                        className={cn(
+                          'flex h-9 items-center gap-2 rounded-md px-2.5 text-[14px] transition-colors',
+                          active
+                            ? 'bg-[var(--primary)] font-medium text-[var(--primary-foreground)]'
+                            : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]',
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.title}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
       <div className="px-3 py-3 flex flex-col items-center gap-1.5">
         <a

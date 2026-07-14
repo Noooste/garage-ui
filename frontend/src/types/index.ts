@@ -16,6 +16,7 @@ export interface Bucket {
     errorDocument?: string;
   };
   quotas?: BucketQuotas | null;
+  effective_permissions?: string[];
 }
 
 export interface BucketDetails extends Bucket {
@@ -238,6 +239,19 @@ export interface MultiNodeStatisticsResponse {
   error: Record<string, string>;
 }
 
+export interface AccessControlBinding {
+  bucket_prefixes: string[];
+  permissions: string[];
+}
+
+export interface AccessControlInfo {
+  enabled: boolean;
+  subject?: string;
+  is_admin?: boolean;
+  bindings?: AccessControlBinding[];
+  cluster_permissions?: string[];
+}
+
 export interface GarageCapabilities {
   garageApiVersion: string;
   features: {
@@ -245,6 +259,7 @@ export interface GarageCapabilities {
     nodeInfo: boolean;
     nodeStatistics: boolean;
   };
+  access_control?: AccessControlInfo;
 }
 
 export interface NodeInfo {

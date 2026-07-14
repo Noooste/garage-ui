@@ -48,6 +48,7 @@ type AdminService interface {
 // GetBucketStatistics) are intentionally excluded.
 type S3Storage interface {
 	ListObjects(ctx context.Context, bucketName, prefix string, maxKeys int, continuationToken string) (*models.ObjectListResponse, error)
+	SearchObjects(ctx context.Context, bucketName, prefix, search string) (*models.ObjectListResponse, error)
 	UploadObject(ctx context.Context, bucketName, key string, body io.Reader, contentType string) (*models.ObjectUploadResponse, error)
 	CreateDirectoryMarker(ctx context.Context, bucketName, key string) (*models.ObjectUploadResponse, error)
 	GetObject(ctx context.Context, bucketName, key string) (io.ReadCloser, *models.ObjectInfo, error)

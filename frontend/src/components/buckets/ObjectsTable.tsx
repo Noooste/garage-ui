@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {ChevronLeft, ChevronRight, Download, Eye, FileIcon, FolderIcon, Loader2, MoreVertical, Trash2} from 'lucide-react';
 import {Select, SelectOption} from '@/components/ui/select';
-import {formatBytes, formatRelativeTime} from '@/lib/file-utils';
+import {downloadObject, formatBytes, formatRelativeTime} from '@/lib/file-utils';
 import type {S3Object} from '@/types';
 
 interface ObjectsTableProps {
@@ -22,6 +22,8 @@ interface ObjectsTableProps {
   objects: S3Object[];
   currentPath: string;
   searchQuery: string;
+  filterQuery: string;
+  deepSearch: boolean;
   selectedFileKeys: Set<string>;
   selectedFolderKeys: Set<string>;
   isDragActive: boolean;
@@ -30,8 +32,10 @@ interface ObjectsTableProps {
   nextContinuationToken?: string;
   itemsPerPage: number;
   onNavigateToFolder: (key: string) => void;
-  onDeleteObject: (object: S3Object) => void;
-  onDeleteFolder: (object: S3Object) => void;
+  // Optional so the parent can withhold them when the user lacks delete
+  // permission; canDelete (below) is derived from onDeleteObject.
+  onDeleteObject?: (object: S3Object) => void;
+  onDeleteFolder?: (object: S3Object) => void;
   onToggleFileSelection: (key: string) => void;
   onToggleFolderSelection: (key: string) => void;
   // Receives the keys of the currently *visible* (filtered) rows so selection
@@ -51,6 +55,8 @@ export function ObjectsTable({
   objects,
   currentPath,
   searchQuery,
+  filterQuery,
+  deepSearch,
   selectedFileKeys,
   selectedFolderKeys,
   isDragActive,
@@ -70,6 +76,7 @@ export function ObjectsTable({
   initialItemsPerPage,
 }: ObjectsTableProps) {
   const navigate = useNavigate();
+  const canDelete = Boolean(onDeleteObject);
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   // Store tokens for each page: [undefined (page 1), token1 (page 2), token2 (page 3), ...]
@@ -94,7 +101,9 @@ export function ObjectsTable({
   }, [initialized, initialPageToken, initialItemsPerPage, itemsPerPage, nextContinuationToken, onPageChange, onItemsPerPageChange]);
 
   const filteredObjects = useMemo(() => {
-    const query = searchQuery.toLowerCase();
+    // Filter on the debounced query, not the raw input, so the list only
+    // updates once typing pauses (matches the debounced server request).
+    const query = filterQuery.toLowerCase();
     const filtered = objects.filter((obj) => obj.key.toLowerCase().includes(query));
     return [...filtered].sort((a, b) => {
       const aIsFolder = a.isFolder ? 1 : 0;
@@ -104,8 +113,8 @@ export function ObjectsTable({
       let compareValue = 0;
       switch (sortColumn) {
         case 'name': {
-          const aName = a.key.replace(currentPath, '').replace('/', '').toLowerCase();
-          const bName = b.key.replace(currentPath, '').replace('/', '').toLowerCase();
+          const aName = a.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
+          const bName = b.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
           compareValue = aName.localeCompare(bName);
           break;
         }
@@ -122,13 +131,15 @@ export function ObjectsTable({
 
       return sortDirection === 'asc' ? compareValue : -compareValue;
     });
-  }, [objects, searchQuery, sortColumn, sortDirection, currentPath]);
+  }, [objects, filterQuery, sortColumn, sortDirection, currentPath]);
 
-  // Effect 2: Reset pagination ONLY on path navigation
+  // Effect 2: Reset pagination on path navigation or when a search begins/ends.
+  // Search results are a single flat list, so page-token state must not leak
+  // across the search/browse boundary.
   useEffect(() => {
     setPageTokens([undefined]);
     setCurrentPageIndex(0);
-  }, [currentPath]);
+  }, [currentPath, searchQuery, deepSearch]);
 
   // Update page tokens when we get a new next token
   useEffect(() => {
@@ -145,11 +156,33 @@ export function ObjectsTable({
     }
   }, [nextContinuationToken, isTruncated, currentPageIndex]);
 
-  const hasPrevious = currentPageIndex > 0;
-  const hasNext = isTruncated;
+  // Prefix search and normal browsing are server-paginated (query folded into
+  // the prefix; continuation tokens for pages). Deep search loads the whole
+  // capped result set in one response, so we paginate that on the client by
+  // itemsPerPage instead of dumping every match at once.
+  const isDeepSearching = deepSearch && searchQuery.trim().length > 0;
+  const clientPaginated = isDeepSearching;
+  const totalPages = clientPaginated
+    ? Math.max(1, Math.ceil(filteredObjects.length / itemsPerPage))
+    : 1;
+  // Clamp during render (not via a setState effect) so a shrinking result set
+  // or a larger page size can't strand us on an out-of-range page.
+  const pageIndex = clientPaginated ? Math.min(currentPageIndex, totalPages - 1) : currentPageIndex;
+  const pageObjects = clientPaginated
+    ? filteredObjects.slice(pageIndex * itemsPerPage, (pageIndex + 1) * itemsPerPage)
+    : filteredObjects;
+  const hasPrevious = pageIndex > 0;
+  const hasNext = clientPaginated ? pageIndex < totalPages - 1 : isTruncated;
 
   const handleNextPage = () => {
-    if (hasNext && nextContinuationToken) {
+    if (!hasNext) return;
+    // Client-paginated (deep search): just advance the slice, no server fetch.
+    if (clientPaginated) {
+      setCurrentPageIndex(pageIndex + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (nextContinuationToken) {
       const nextIndex = currentPageIndex + 1;
       setCurrentPageIndex(nextIndex);
       onPageChange(nextContinuationToken);
@@ -158,13 +191,16 @@ export function ObjectsTable({
   };
 
   const handlePreviousPage = () => {
-    if (hasPrevious) {
-      const prevIndex = currentPageIndex - 1;
-      setCurrentPageIndex(prevIndex);
-      const previousToken = pageTokens[prevIndex];
-      onPageChange(previousToken);
+    if (!hasPrevious) return;
+    if (clientPaginated) {
+      setCurrentPageIndex(pageIndex - 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
+    const prevIndex = currentPageIndex - 1;
+    setCurrentPageIndex(prevIndex);
+    onPageChange(pageTokens[prevIndex]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleItemsPerPageChange = (value: string) => {
@@ -189,23 +225,25 @@ export function ObjectsTable({
         <Table>
           <TableHeader>
           <TableRow>
-            <TableHead className="w-[50px]">
-              <Checkbox
-                checked={
-                  filteredObjects.length > 0 &&
-                  filteredObjects.every(obj =>
-                    obj.isFolder ? selectedFolderKeys.has(obj.key) : selectedFileKeys.has(obj.key),
-                  )
-                }
-                onCheckedChange={() =>
-                  onSelectAll(
-                    filteredObjects.filter(obj => !obj.isFolder).map(obj => obj.key),
-                    filteredObjects.filter(obj => obj.isFolder).map(obj => obj.key),
-                  )
-                }
-                aria-label="Select all objects"
-              />
-            </TableHead>
+            {canDelete && (
+              <TableHead className="w-[50px]">
+                <Checkbox
+                  checked={
+                    filteredObjects.length > 0 &&
+                    filteredObjects.every(obj =>
+                      obj.isFolder ? selectedFolderKeys.has(obj.key) : selectedFileKeys.has(obj.key),
+                    )
+                  }
+                  onCheckedChange={() =>
+                    onSelectAll(
+                      filteredObjects.filter(obj => !obj.isFolder).map(obj => obj.key),
+                      filteredObjects.filter(obj => obj.isFolder).map(obj => obj.key),
+                    )
+                  }
+                  aria-label="Select all objects"
+                />
+              </TableHead>
+            )}
           <TableHead
             className="cursor-pointer hover:bg-muted/50"
             onClick={() => handleSort('name')}
@@ -232,7 +270,7 @@ export function ObjectsTable({
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center py-12">
+            <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12">
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span>Loading objects...</span>
@@ -241,7 +279,7 @@ export function ObjectsTable({
           </TableRow>
         ) : filteredObjects.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+            <TableCell colSpan={canDelete ? 7 : 6} className="text-center py-12 text-muted-foreground">
               {searchQuery
                 ? 'No objects found matching your search'
                 : isDragActive
@@ -250,23 +288,25 @@ export function ObjectsTable({
             </TableCell>
           </TableRow>
         ) : (
-          filteredObjects.map((obj) => (
+          pageObjects.map((obj) => (
             <TableRow key={obj.key}>
-              <TableCell className="w-[50px]">
-                {obj.isFolder ? (
-                  <Checkbox
-                    checked={selectedFolderKeys.has(obj.key)}
-                    onCheckedChange={() => onToggleFolderSelection(obj.key)}
-                    aria-label={`Select folder ${obj.key} (deletes its contents recursively)`}
-                  />
-                ) : (
-                  <Checkbox
-                    checked={selectedFileKeys.has(obj.key)}
-                    onCheckedChange={() => onToggleFileSelection(obj.key)}
-                    aria-label={`Select file ${obj.key}`}
-                  />
-                )}
-              </TableCell>
+              {canDelete && (
+                <TableCell className="w-[50px]">
+                  {obj.isFolder ? (
+                    <Checkbox
+                      checked={selectedFolderKeys.has(obj.key)}
+                      onCheckedChange={() => onToggleFolderSelection(obj.key)}
+                      aria-label={`Select folder ${obj.key} (deletes its contents recursively)`}
+                    />
+                  ) : (
+                    <Checkbox
+                      checked={selectedFileKeys.has(obj.key)}
+                      onCheckedChange={() => onToggleFileSelection(obj.key)}
+                      aria-label={`Select file ${obj.key}`}
+                    />
+                  )}
+                </TableCell>
+              )}
               <TableCell>
                 <div className="flex items-center gap-2">
                   {obj.isFolder ? (
@@ -279,7 +319,7 @@ export function ObjectsTable({
                       onClick={() => onNavigateToFolder(obj.key)}
                       className="font-medium cursor-pointer underline hover:text-primary"
                     >
-                      {obj.key.replace(currentPath, '').replace('/', '')}
+                      {obj.key.replace(currentPath, '').replace(/\/$/, '')}
                     </button>
                   ) : (
                     <button
@@ -367,14 +407,18 @@ export function ObjectsTable({
                         <FolderIcon className="h-4 w-4" />
                         Open
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => onDeleteFolder(obj)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete folder
-                      </DropdownMenuItem>
+                      {onDeleteFolder && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => onDeleteFolder(obj)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete folder
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
@@ -389,18 +433,22 @@ export function ObjectsTable({
                         <Eye className="h-4 w-4" />
                         View Details
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => downloadObject(bucketName, obj.key)}>
                         <Download className="h-4 w-4" />
                         Download
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => onDeleteObject(obj)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
+                      {onDeleteObject && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => onDeleteObject(obj)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
@@ -431,7 +479,9 @@ export function ObjectsTable({
         {/* Pagination info and controls */}
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">
-            Page {currentPageIndex + 1} • Showing {filteredObjects.length} item{filteredObjects.length !== 1 ? 's' : ''}
+            {isDeepSearching
+              ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
+              : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`}
           </span>
 
           <div className="flex items-center gap-2">

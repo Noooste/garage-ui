@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.9.0](https://github.com/Noooste/garage-ui/compare/v0.8.5...v0.9.0) (2026-07-11)
+
+
+### Features
+
+* **backend,frontend:** implement prefix and recursive substring search for bucket objects ([#89](https://github.com/Noooste/garage-ui/issues/89)) ([3098e47](https://github.com/Noooste/garage-ui/commit/3098e474f202f36b527c8636cd1d4e8c08e287d2))
+* **oidc:** add fine grained access control ([#91](https://github.com/Noooste/garage-ui/issues/91)) ([0d804fb](https://github.com/Noooste/garage-ui/commit/0d804fbd39ed656511b671d237ad14fc8c21786d))
+
+## [0.8.5](https://github.com/Noooste/garage-ui/compare/v0.8.4...v0.8.5) (2026-07-03)
+
+
+### Bug Fixes
+
+* **frontend:** add downloadObject function for downloading files from a bucket ([430d1a5](https://github.com/Noooste/garage-ui/commit/430d1a5d68e4f9915a2951d5b31c1b5ea56cb24c))
+
+## [0.8.4](https://github.com/Noooste/garage-ui/compare/v0.8.3...v0.8.4) (2026-06-22)
+
+
+### Bug Fixes
+
+* **helm:** track appVersion in release-please and fix badges ([1ffdfe8](https://github.com/Noooste/garage-ui/commit/1ffdfe83c884dc5e39d071343d5269164746c536))
+
+## [0.8.3](https://github.com/Noooste/garage-ui/compare/v0.8.2...v0.8.3) (2026-06-21)
+
+
+### Bug Fixes
+
+* **backend:** improve API version detection with retry logic for health probes ([46aa375](https://github.com/Noooste/garage-ui/commit/46aa3752c81788787388d1c67e29cef786bdabff))
+* **helm:** update version badges in README for Garage UI ([28c186f](https://github.com/Noooste/garage-ui/commit/28c186f3eba1a1c111100712f1eaec22a5d18eb2))
+
+## [0.8.2](https://github.com/Noooste/garage-ui/compare/v0.8.1...v0.8.2) (2026-06-07)
+
+
+### Bug Fixes
+
+* **backend:** prevent OIDC login loop from empty cookie name ([#76](https://github.com/Noooste/garage-ui/issues/76)) ([22be89b](https://github.com/Noooste/garage-ui/commit/22be89b2ff86465abb90dab0344ef9366ab181b3))
+
+## [0.8.1](https://github.com/Noooste/garage-ui/compare/v0.8.0...v0.8.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **frontend:** align three-dot menu item icon spacing and text alignment ([#72](https://github.com/Noooste/garage-ui/issues/72)) ([45f8770](https://github.com/Noooste/garage-ui/commit/45f87707996e92d0f8f75e79c8f60a13556eaf6e))
+
+## [0.8.0](https://github.com/Noooste/garage-ui/compare/v0.7.0...v0.8.0) (2026-05-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* **backend,helm:** bind to IPv6 wildcard by default for dual-stack support
+
+### Features
+
+* **backend,helm:** bind to IPv6 wildcard by default for dual-stack support ([5427758](https://github.com/Noooste/garage-ui/commit/5427758eaadc4fa1327402b958b7e7e1f43aecdd))
+* **docs:** add documentation generation command to Makefile ([186af18](https://github.com/Noooste/garage-ui/commit/186af18d54f739bd9b467cbf3ab9ccc2e92ddf62))
+
 ## [0.7.0](https://github.com/Noooste/garage-ui/compare/v0.6.2...v0.7.0) (2026-05-23)
 
 

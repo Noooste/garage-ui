@@ -2,8 +2,8 @@
 
 A Helm chart for deploying [Garage UI](https://github.com/Noooste/garage-ui), a modern web interface for managing [Garage](https://garagehq.deuxfleurs.fr/) distributed object storage systems.
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](Chart.yaml)
-[![App Version](https://img.shields.io/badge/app%20version-v0.5.0-green.svg)](Chart.yaml)
+[![Version](https://img.shields.io/badge/version-0.9.0?color=blue)](Chart.yaml) <!-- x-release-please-version -->
+[![App Version](https://img.shields.io/badge/app%20version-v0.9.0?color=green)](Chart.yaml) <!-- x-release-please-version -->
 
 ## Table of Contents
 
@@ -92,6 +92,28 @@ If you've cloned the repository:
 ```bash
 helm install garage-ui ./helm/garage-ui -f my-values.yaml
 ```
+
+### Installing from the OCI registry (ghcr.io)
+
+The chart is published as an OCI artifact to GitHub Container Registry. No
+`helm repo add` is required:
+
+```bash
+helm install garage-ui oci://ghcr.io/noooste/charts/garage-ui \
+  --version <x.y.z> -f my-values.yaml
+```
+
+The chart is signed with [cosign](https://docs.sigstore.dev/) using keyless
+signing. To verify the signature before installing:
+
+```bash
+cosign verify ghcr.io/noooste/charts/garage-ui:<x.y.z> \
+  --certificate-identity-regexp 'https://github.com/Noooste/garage-ui/.+' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The chart also remains available from the classic Helm repository at
+`https://helm.noste.dev`.
 
 ### Installing with inline values
 
@@ -202,6 +224,45 @@ config:
       issuer_url: "https://auth.example.com/realms/master"
       # ... additional OIDC settings
 ```
+
+#### Multi-User Access Control (optional)
+
+Scope what each OIDC user can see and do, based on the teams in their token
+claims. **Absent by default**, so every authenticated user keeps full access.
+When set, authorization becomes default-deny.
+
+> **Not a security boundary.** This is UI-layer policy only. Anyone holding the
+> Garage admin token or raw S3 keys bypasses it. See
+> [docs/access-control.md](../../docs/access-control.md) for the full model and
+> permission vocabulary.
+
+```yaml
+config:
+  auth:
+    oidc:
+      enabled: true
+      # OIDC claim (go-jmespath) listing the user's teams.
+      team_attribute_path: "groups"
+      # admin_role stays optional once access_control is set: unmatched users
+      # are denied rather than promoted to admin.
+  access_control:
+    presets:
+      bucket_readonly: [bucket.list, bucket.read, object.list, object.read]
+      bucket_owner: ["preset:bucket_readonly", bucket.create, bucket.update,
+                     bucket.delete, object.write, object.delete]
+    teams:
+      - name: backend
+        claim_values: ["garage-team-backend"]   # matched against the team_attribute_path claim
+        bindings:
+          - bucket_prefixes: ["backend-"]
+            permissions: ["preset:bucket_owner"]
+          - bucket_prefixes: ["shared-"]
+            permissions: ["preset:bucket_readonly"]
+        cluster_permissions: [cluster.status, cluster.health]
+```
+
+Admin-password and Garage-admin-token logins are always full admin in v1; only
+OIDC users can be scoped to a team.
 
 #### CORS Configuration
 
@@ -628,16 +689,17 @@ Enable Prometheus metrics scraping (requires Prometheus Operator):
 serviceMonitor:
   enabled: true
   interval: 30s
-  path: /api/v1/monitoring/metrics
+  # /metrics is served only when config.auth.metrics_public is true
+  path: /metrics
   labels:
     prometheus: kube-prometheus
 ```
 
 ### Metrics Endpoint
 
-The application exposes metrics at:
-- Path: `/api/v1/monitoring/metrics`
-- Format: Prometheus format (proxies Garage Admin API metrics)
+The application exposes Prometheus-format metrics (proxying the Garage Admin API) at:
+- `/api/v1/monitoring/metrics`: always registered, requires authentication.
+- `/metrics`: top-level, unauthenticated. Served ONLY when `config.auth.metrics_public` is `true`. Use this for Prometheus scraping when authentication is enabled, and restrict access with a NetworkPolicy / trusted scrape network.
 
 ### Health Checks
 

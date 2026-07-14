@@ -65,5 +65,6 @@ backend/docs/
 config.yaml
 docs/**/*.md
 !docs/garage-setup.md
+!docs/access-control.md
 
 **/worktrees
