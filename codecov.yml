@@ -10,6 +10,7 @@ coverage:
 
 ignore:
   - "backend/main.go"
+  - "backend/cmd/"
   - "backend/docs/"
   - "backend/internal/services/mocks/"
   - "backend/**/*_mock.go"

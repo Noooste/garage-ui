@@ -1150,3 +1150,68 @@ func TestGetObject_RangeForMissingObjectIs404(t *testing.T) {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+// A ranged read whose metadata resolves but whose byte fetch fails, for example
+// when the object is deleted between the two calls, returns 404.
+func TestGetObject_RangeReadErrorIs404(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.GetObjectMetadataFn = func(_ context.Context, _, key string) (*models.ObjectInfo, error) {
+		return &models.ObjectInfo{Key: key, Size: 10}, nil
+	}
+	s3.GetObjectRangeFn = func(_ context.Context, _, _ string, _, _ int64) (io.ReadCloser, error) {
+		return nil, errors.New("read failed")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/clip.mp4", nil)
+	req.Header.Set("Range", "bytes=0-5")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// A ranged request with download=true still streams 206 but marks the body as
+// an attachment instead of inline.
+func TestGetObject_RangeWithDownloadSetsAttachment(t *testing.T) {
+	app, s3 := newObjectsTestApp(t)
+	s3.GetObjectMetadataFn = func(_ context.Context, _, key string) (*models.ObjectInfo, error) {
+		return &models.ObjectInfo{Key: key, Size: 10, ContentType: "video/mp4"}, nil
+	}
+	s3.GetObjectRangeFn = func(_ context.Context, _, _ string, _, _ int64) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader("01234")), nil
+	}
+	req := httptest.NewRequest(http.MethodGet, "/buckets/b1/objects/clip.mp4?download=true", nil)
+	req.Header.Set("Range", "bytes=0-4")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("status = %d, want 206", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(got, "attachment") {
+		t.Errorf("Content-Disposition = %q, want attachment", got)
+	}
+}
+
+// GetObject rejects a request that resolves to an empty object key with 400.
+// This guards the wildcard dispatch path where the key comes from locals.
+func TestGetObject_EmptyKeyIsBadRequest(t *testing.T) {
+	s3 := &mocks.S3Mock{}
+	h := NewObjectHandler(s3, &mintStub{})
+	app := fiber.New()
+	// Mounted without a :key param so the handler resolves an empty key.
+	app.Get("/buckets/:bucket/object", h.GetObject)
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/buckets/b1/object", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
