@@ -228,16 +228,20 @@ export function ObjectsTable({
             {canDelete && (
               <TableHead className="w-[50px]">
                 <Checkbox
+                  // Scope select-all to the rows actually on screen (pageObjects).
+                  // In normal/prefix browsing this equals filteredObjects; in
+                  // client-paginated deep search it is just the visible page, so
+                  // one click never selects hidden matches for a destructive delete.
                   checked={
-                    filteredObjects.length > 0 &&
-                    filteredObjects.every(obj =>
+                    pageObjects.length > 0 &&
+                    pageObjects.every(obj =>
                       obj.isFolder ? selectedFolderKeys.has(obj.key) : selectedFileKeys.has(obj.key),
                     )
                   }
                   onCheckedChange={() =>
                     onSelectAll(
-                      filteredObjects.filter(obj => !obj.isFolder).map(obj => obj.key),
-                      filteredObjects.filter(obj => obj.isFolder).map(obj => obj.key),
+                      pageObjects.filter(obj => !obj.isFolder).map(obj => obj.key),
+                      pageObjects.filter(obj => obj.isFolder).map(obj => obj.key),
                     )
                   }
                   aria-label="Select all objects"
