@@ -32,6 +32,7 @@ A modern web interface to manage <a href="https://garagehq.deuxfleurs.fr/">Garag
 - **Flexible authentication** - no auth, basic credentials, or OIDC (Keycloak, Authentik, etc.)
 - **Multi-user access control** - optional OIDC-team-based permissions, see [docs/access-control.md](docs/access-control.md)
 - **Easy deployment** - single Docker image or Helm chart, configure with one YAML file
+- **Preview common file types** - images, video, PDF, and text without downloading
 
 ## Quick Start
 
@@ -247,7 +248,7 @@ Roughly ordered by value. Open an [issue](https://github.com/Noooste/garage-ui/i
 - [x] **Bucket quotas**: size and object count limits from bucket settings
 - [x] **Zero-config startup**: run straight from `garage.toml`, log in with the admin token
 - [x] **Broad compatibility**: Garage v1 through latest, IPv6-only networks, secrets from files
-- [ ] **Inline object preview**: images, video, PDF, and text without downloading ([#60](https://github.com/Noooste/garage-ui/issues/60))
+- [X] **Inline object preview**: images, video, PDF, and text without downloading ([#60](https://github.com/Noooste/garage-ui/issues/60))
 - [ ] **Presigned share links**: time-limited download links from the object browser
 - [ ] **Resumable uploads**: multipart uploads that survive a dropped connection
 - [ ] **Visual layout editor**: staged vs. applied diff before committing layout changes
