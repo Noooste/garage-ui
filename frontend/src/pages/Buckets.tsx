@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { useBuckets, useCreateBucket, useDeleteBucket } from '@/hooks/useApi';
 import { usePermissions } from '@/hooks/usePermissions';
+import { accessApi, bucketsApi } from '@/lib/api';
+import { queryKeys } from '@/lib/query-client';
+import { createBucketWithKey, type NewKeyRequest } from '@/lib/create-bucket-with-key';
 import { BucketListView } from '@/components/buckets/BucketListView';
 import { CreateBucketDialog } from '@/components/buckets/CreateBucketDialog';
 import { DangerousConfirmDialog } from '@/components/ui/dangerous-confirm-dialog';
@@ -17,18 +21,41 @@ export function Buckets() {
   const [deleteTarget, setDeleteTarget] = useState<Bucket | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const queryClient = useQueryClient();
   const { hasAnyPerm } = usePermissions();
   const { data: buckets = [], isLoading } = useBuckets();
   const createMutation = useCreateBucket();
   const deleteMutation = useDeleteBucket();
 
-  const createBucket = async (name: string, region?: string) => {
-    try {
-      await createMutation.mutateAsync({ name, region });
-      return true;
-    } catch {
-      return false;
+  // Both grant permissions are required by POST /buckets/:name/permissions, and
+  // the bucket does not exist yet, so this is a best-effort check across the
+  // subject's bindings. A 403 at call time surfaces in the dialog's outcome panel.
+  const canCreateKey =
+    hasAnyPerm('key.create') &&
+    hasAnyPerm('permission.allow_bucket_key') &&
+    hasAnyPerm('permission.deny_bucket_key');
+
+  const createBucket = async (name: string, key?: NewKeyRequest) => {
+    const result = await createBucketWithKey(
+      {
+        createBucket: (n) => createMutation.mutateAsync({ name: n }),
+        // Called directly, not through useCreateAccessKey and
+        // useGrantBucketPermission: their success toasts would stack on top of
+        // the dialog's own outcome panel.
+        createKey: (n) => accessApi.createKey(n),
+        grant: (bucket, accessKeyId, permissions) =>
+          bucketsApi.grantPermission(bucket, accessKeyId, permissions),
+      },
+      name,
+      key,
+    );
+
+    if (result.key) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.buckets.detail(name) });
     }
+
+    return result;
   };
 
   const confirmDelete = async () => {
@@ -74,6 +101,7 @@ export function Buckets() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreateBucket={createBucket}
+        canCreateKey={canCreateKey}
       />
 
       <DangerousConfirmDialog
