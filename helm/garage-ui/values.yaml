@@ -160,6 +160,14 @@ config:
     # Options: json, text
     format: "json"
 
+  # Optional: team-based access control (see docs/access-control.md).
+  # Absent  -> every authenticated user has full access.
+  # Present -> default-deny: OIDC users get only what their teams grant; users
+  #            matching no team get 403 everywhere. admin_role users, admin
+  #            password logins, and token logins are always full-admin.
+  # NOTE: this is UI-layer policy, NOT a security boundary. Anyone holding the
+  # Garage admin token or S3 keys bypasses it entirely.
+  #
   # access_control:
   #   presets:
   #     bucket_readonly: [bucket.list, bucket.read, object.list, object.read]
