@@ -1,5 +1,7 @@
 import * as React from 'react';
+import {createPortal} from 'react-dom';
 import {cn} from '@/lib/utils';
+import {placeUnder} from '@/lib/popup-position';
 import {ChevronDown, Check} from 'lucide-react';
 
 export interface SelectOption {
@@ -32,11 +34,16 @@ const useSelectContext = () => {
 };
 
 const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
-  ({ className, children, value, onChange, disabled, placeholder = 'Select an option...', ...props }, _ref) => {
+  ({ className, children, value, onChange, disabled, placeholder = 'Select an option...', ...props }, ref) => {
     const [open, setOpen] = React.useState(false);
     const [internalValue, setInternalValue] = React.useState(value);
     const containerRef = React.useRef<HTMLDivElement>(null);
     const buttonRef = React.useRef<HTMLButtonElement>(null);
+    const popupRef = React.useRef<HTMLDivElement>(null);
+    const [popupStyle, setPopupStyle] = React.useState<React.CSSProperties>({});
+
+    // The forwarded ref points at the trigger, as it does on DropdownMenuTrigger.
+    React.useImperativeHandle(ref, () => buttonRef.current as HTMLButtonElement);
 
     const displayValue = React.useMemo(() => {
       const currentValue = value ?? internalValue;
@@ -62,11 +69,40 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       setInternalValue(value);
     }, [value]);
 
+    // The popup is portalled to the body so an ancestor with overflow-hidden
+    // (a dialog card, a scroll container) cannot clip it.
+    React.useLayoutEffect(() => {
+      if (!open) return;
+
+      const updatePosition = () => {
+        const trigger = buttonRef.current;
+        if (!trigger) return;
+        const rect = trigger.getBoundingClientRect();
+
+        setPopupStyle({
+          position: 'fixed',
+          left: rect.left,
+          width: rect.width,
+          backgroundColor: 'var(--popover)',
+          ...placeUnder(rect, window.innerHeight),
+        });
+      };
+
+      updatePosition();
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+      };
+    }, [open]);
+
     React.useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
-        if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-          setOpen(false);
-        }
+        const target = event.target as Node;
+        if (containerRef.current?.contains(target) || popupRef.current?.contains(target)) return;
+        setOpen(false);
       };
 
       if (open) {
@@ -106,13 +142,15 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             <ChevronDown className={cn('h-4 w-4 opacity-50 transition-transform', open && 'transform rotate-180')} />
           </button>
 
-          {open && (
+          {open && createPortal(
             <div
-              className="absolute z-50 w-full mt-1 text-popover-foreground rounded-md border border-border shadow-lg max-h-60 overflow-auto"
-              style={{ backgroundColor: 'var(--popover)' }}
+              ref={popupRef}
+              className="z-50 text-popover-foreground rounded-md border border-border shadow-lg overflow-auto"
+              style={popupStyle}
             >
               {children}
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
       </SelectContext.Provider>

@@ -1,6 +1,8 @@
 package services
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"io"
@@ -13,6 +15,9 @@ import (
 
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
+
+	"github.com/Noooste/azuretls-client"
+	fhttp "github.com/Noooste/fhttp"
 )
 
 // newAdminTestServer wires an httptest.Server (with the supplied handler) to a
@@ -528,6 +533,66 @@ func TestDoRequest_MalformedJSONReturnsDecodeError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "decode") {
 		t.Errorf("error %v should mention decoding", err)
+	}
+}
+
+// gzipBytes gzip-compresses b, mirroring what a reverse proxy or the Garage
+// admin API emits when Content-Encoding: gzip negotiation succeeds.
+func gzipBytes(t *testing.T, b []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(b); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// TestDecodeResponse_GzipEncodedBody reproduces issue #95. Over HTTP/2 (Garage
+// 2.3.0 behind a reverse proxy) the transport does NOT transparently gunzip, so
+// decodeResponse receives a still-compressed RawBody with Content-Encoding:gzip.
+// Feeding that raw gzip stream to the JSON decoder failed with:
+// "invalid character '\x1f' looking for beginning of value" (0x1f is the gzip
+// magic byte). decodeResponse must honor Content-Encoding and decompress first.
+func TestDecodeResponse_GzipEncodedBody(t *testing.T) {
+	want := &models.GarageBucketInfo{ID: "gz-bucket"}
+	payload, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	resp := &azuretls.Response{
+		StatusCode: http.StatusOK,
+		Header:     fhttp.Header{"Content-Encoding": []string{"gzip"}},
+		RawBody:    io.NopCloser(bytes.NewReader(gzipBytes(t, payload))),
+	}
+
+	var got models.GarageBucketInfo
+	if err := decodeResponse(resp, &got); err != nil {
+		t.Fatalf("decodeResponse with gzip body: %v", err)
+	}
+	if got.ID != want.ID {
+		t.Errorf("ID = %q, want %q", got.ID, want.ID)
+	}
+}
+
+// TestDecodeResponse_GzipEncodedErrorBody ensures a compressed non-2xx body is
+// also decompressed before being echoed into the error message.
+func TestDecodeResponse_GzipEncodedErrorBody(t *testing.T) {
+	resp := &azuretls.Response{
+		StatusCode: http.StatusInternalServerError,
+		Header:     fhttp.Header{"Content-Encoding": []string{"gzip"}},
+		RawBody:    io.NopCloser(bytes.NewReader(gzipBytes(t, []byte("boom")))),
+	}
+
+	err := decodeResponse(resp, nil)
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("error %q should contain decompressed body %q", err.Error(), "boom")
 	}
 }
 

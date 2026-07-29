@@ -1,4 +1,5 @@
 import { AlertCircle, Database, FolderOpen, HardDrive, Server, Zap } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/page-header';
 import { IconTile } from '@/components/ui/icon-tile';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -154,20 +155,25 @@ export function Dashboard() {
             ) : (
               <ul className="divide-y divide-[var(--border)]">
                 {buckets.slice(0, 5).map((bucket) => (
-                  <li key={bucket.name} className="flex items-center gap-3 py-3">
-                    <IconTile icon={<Database />} tone="primary" size="md" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-medium">{bucket.name}</p>
-                      <p className="truncate text-[12.5px] text-[var(--muted-foreground)]">
-                        Created {new Date(bucket.creationDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[14px] font-medium">{bucket.objectCount?.toLocaleString() ?? '—'} objects</p>
-                      <p className="text-[12.5px] text-[var(--muted-foreground)]">
-                        {bucket.size ? formatBytes(bucket.size) : '—'}
-                      </p>
-                    </div>
+                  <li key={bucket.name}>
+                    <Link
+                      to={`/buckets/${bucket.name}/objects`}
+                      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-[var(--muted)]"
+                    >
+                      <IconTile icon={<Database />} tone="primary" size="md" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-medium">{bucket.name}</p>
+                        <p className="truncate text-[12.5px] text-[var(--muted-foreground)]">
+                          Created {new Date(bucket.creationDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[14px] font-medium">{bucket.objectCount?.toLocaleString() ?? '—'} objects</p>
+                        <p className="text-[12.5px] text-[var(--muted-foreground)]">
+                          {bucket.size ? formatBytes(bucket.size) : '—'}
+                        </p>
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
