@@ -1,5 +1,5 @@
-import {useEffect, useMemo, useState} from 'react';
-import {useNavigate} from 'react-router-dom';
+import {useEffect, useMemo, useRef, useState} from 'react';
+import {useNavigate} from 'react-router';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
@@ -82,23 +82,25 @@ export function ObjectsTable({
   // Store tokens for each page: [undefined (page 1), token1 (page 2), token2 (page 3), ...]
   const [pageTokens, setPageTokens] = useState<(string | undefined)[]>([undefined]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [initialized, setInitialized] = useState(false);
+  // Never read during render, so a ref rather than state.
+  const initializedRef = useRef(false);
 
   // Initialize from URL params on first load
   useEffect(() => {
-    if (!initialized && initialItemsPerPage && initialItemsPerPage !== itemsPerPage) {
+    if (initializedRef.current) return;
+    if (initialItemsPerPage && initialItemsPerPage !== itemsPerPage) {
       onItemsPerPageChange(initialItemsPerPage);
-      setInitialized(true);
+      initializedRef.current = true;
     }
-    if (!initialized && initialPageToken && initialPageToken !== nextContinuationToken) {
+    if (initialPageToken && initialPageToken !== nextContinuationToken) {
       // If we have an initial page token, trigger page change
       onPageChange(initialPageToken);
-      setInitialized(true);
+      initializedRef.current = true;
     }
-    if (!initialized && !initialPageToken && !initialItemsPerPage) {
-      setInitialized(true);
+    if (!initialPageToken && !initialItemsPerPage) {
+      initializedRef.current = true;
     }
-  }, [initialized, initialPageToken, initialItemsPerPage, itemsPerPage, nextContinuationToken, onPageChange, onItemsPerPageChange]);
+  }, [initialPageToken, initialItemsPerPage, itemsPerPage, nextContinuationToken, onPageChange, onItemsPerPageChange]);
 
   const filteredObjects = useMemo(() => {
     // Filter on the debounced query, not the raw input, so the list only
@@ -133,28 +135,25 @@ export function ObjectsTable({
     });
   }, [objects, filterQuery, sortColumn, sortDirection, currentPath]);
 
-  // Effect 2: Reset pagination on path navigation or when a search begins/ends.
-  // Search results are a single flat list, so page-token state must not leak
-  // across the search/browse boundary.
-  useEffect(() => {
+  // Reset pagination on path navigation or when a search begins/ends. Search
+  // results are a single flat list, so page-token state must not leak across
+  // the search/browse boundary. Otherwise, record the next continuation token
+  // as it arrives. Both are state adjustments done during render, not effects.
+  const resetKey = JSON.stringify([currentPath, searchQuery, deepSearch]);
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey);
     setPageTokens([undefined]);
     setCurrentPageIndex(0);
-  }, [currentPath, searchQuery, deepSearch]);
-
-  // Update page tokens when we get a new next token
-  useEffect(() => {
-    if (nextContinuationToken && isTruncated) {
-      setPageTokens(prev => {
-        const newTokens = [...prev];
-        // Only add the token if we don't have it yet
-        const nextIndex = currentPageIndex + 1;
-        if (nextIndex >= newTokens.length) {
-          newTokens[nextIndex] = nextContinuationToken;
-        }
-        return newTokens;
-      });
+  } else if (nextContinuationToken && isTruncated) {
+    // Only add the token if we don't have it yet
+    const nextIndex = currentPageIndex + 1;
+    if (nextIndex >= pageTokens.length) {
+      const newTokens = [...pageTokens];
+      newTokens[nextIndex] = nextContinuationToken;
+      setPageTokens(newTokens);
     }
-  }, [nextContinuationToken, isTruncated, currentPageIndex]);
+  }
 
   // Prefix search and normal browsing are server-paginated (query folded into
   // the prefix; continuation tokens for pages). Deep search loads the whole

@@ -40,7 +40,13 @@ export function DangerousConfirmDialog({
   onConfirm,
 }: DangerousConfirmDialogProps) {
   const [value, setValue] = React.useState('');
-  React.useEffect(() => { if (!open) setValue(''); }, [open]);
+
+  // Clear the field when the dialog closes (adjust-during-render, not an effect).
+  const [wasOpen, setWasOpen] = React.useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (!open) setValue('');
+  }
 
   const matches = value === confirmationText;
 

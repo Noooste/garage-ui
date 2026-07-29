@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { cn } from '@/lib/utils';
 import { BookOpen, Database, Key, LayoutDashboard, Server } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';

@@ -98,6 +98,7 @@ export function useBucketObjects(bucketName: string | null, currentPath: string 
 
     // Deep search: recursive substring scan across the current subtree.
     if (debouncedSearch && deepSearch) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- imperative data fetching: the loading flag must flip synchronously at request start
       searchObjects(debouncedSearch);
       return;
     }

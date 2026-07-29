@@ -112,10 +112,10 @@ export function ObjectBrowserView({
   });
 
   // Helper function to traverse file/directory tree
-  const traverseFileTree = async (item: any, path: string, files: File[]): Promise<void> => {
+  const traverseFileTree = async (item: FileSystemEntry, path: string, files: File[]): Promise<void> => {
     return new Promise((resolve) => {
       if (item.isFile) {
-        item.file((file: File) => {
+        (item as FileSystemFileEntry).file((file: File) => {
           const fullPath = path + file.name;
           Object.defineProperty(file, 'webkitRelativePath', {
             value: fullPath,
@@ -125,8 +125,8 @@ export function ObjectBrowserView({
           resolve();
         });
       } else if (item.isDirectory) {
-        const dirReader = item.createReader();
-        dirReader.readEntries(async (entries: any[]) => {
+        const dirReader = (item as FileSystemDirectoryEntry).createReader();
+        dirReader.readEntries(async (entries) => {
           for (const entry of entries) {
             await traverseFileTree(entry, path + item.name + '/', files);
           }
@@ -389,7 +389,7 @@ export function ObjectBrowserView({
                   <input
                     id="folder-input"
                     type="file"
-                    {...({ webkitdirectory: '', directory: '', mozdirectory: '' } as any)}
+                    {...({ webkitdirectory: '', directory: '', mozdirectory: '' } as unknown as React.InputHTMLAttributes<HTMLInputElement>)}
                     onChange={(e) => {
                       if (e.target.files) {
                         const files = Array.from(e.target.files);

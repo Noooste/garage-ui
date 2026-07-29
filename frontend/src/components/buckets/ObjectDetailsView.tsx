@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router';
 import { objectsApi } from '@/lib/api';
 import { useBuckets } from '@/hooks/useApi';
 import { useBucketCan } from '@/hooks/usePermissions';
@@ -45,32 +45,45 @@ export function ObjectDetailsView() {
   const canDelete = canBucket(bucket, 'object.delete');
   const canRead = canBucket(bucket, 'object.read');
 
-  const [metadata, setMetadata] = useState<ObjectMetadata | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // The fetch result is keyed by its target, so loading/error/metadata are all
+  // derived: a result for a previous object is simply ignored, which also
+  // protects against a slow response landing after navigation.
+  const target = bucketName && objectKey ? `${bucketName}/${objectKey}` : null;
+  const [result, setResult] = useState<{
+    target: string;
+    metadata?: ObjectMetadata;
+    error?: string;
+  } | null>(null);
+
   useEffect(() => {
-    if (!bucketName || !objectKey) {
-      setError('Bucket name and object key are required');
-      setIsLoading(false);
-      return;
-    }
-    const fetchMetadata = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const data = await objectsApi.getMetadata(bucketName, objectKey);
-        setMetadata(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load object metadata');
-      } finally {
-        setIsLoading(false);
-      }
+    if (!bucketName || !objectKey) return;
+    const requestTarget = `${bucketName}/${objectKey}`;
+    let stale = false;
+    objectsApi
+      .getMetadata(bucketName, objectKey)
+      .then((data) => {
+        if (!stale) setResult({ target: requestTarget, metadata: data });
+      })
+      .catch((err: unknown) => {
+        if (!stale) {
+          setResult({
+            target: requestTarget,
+            error: err instanceof Error ? err.message : 'Failed to load object metadata',
+          });
+        }
+      });
+    return () => {
+      stale = true;
     };
-    fetchMetadata();
   }, [bucketName, objectKey]);
+
+  const current = result && result.target === target ? result : null;
+  const metadata = current?.metadata ?? null;
+  const error = !target ? 'Bucket name and object key are required' : current?.error ?? null;
+  const isLoading = Boolean(target) && !current;
 
   const parentPath = objectKey?.split('/').slice(0, -1).join('/') ?? '';
   const fileName = objectKey?.split('/').pop() || objectKey || '';

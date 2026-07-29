@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useParams } from 'react-router-dom';
+import { Outlet, useLocation, useParams } from 'react-router';
 import { Sidebar } from './sidebar';
 import { TopBar } from './top-bar';
 import { useState, useMemo } from 'react';

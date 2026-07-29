@@ -228,7 +228,7 @@ export const bucketsApi = {
     name: string,
     payload: { enabled: boolean; indexDocument?: string; errorDocument?: string }
   ) => {
-    const response = await api.put<ApiResponse<any>>(
+    const response = await api.put<ApiResponse<unknown>>(
       `/v1/buckets/${encodeURIComponent(name)}/website`,
       payload
     );
@@ -244,7 +244,7 @@ export const bucketsApi = {
     const body: { maxSize?: number; maxObjects?: number } = {};
     if (payload.maxSize !== null) body.maxSize = payload.maxSize;
     if (payload.maxObjects !== null) body.maxObjects = payload.maxObjects;
-    const response = await api.put<ApiResponse<any>>(
+    const response = await api.put<ApiResponse<unknown>>(
       `/v1/buckets/${encodeURIComponent(name)}/quotas`,
       body
     );

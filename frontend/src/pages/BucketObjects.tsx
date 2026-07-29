@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { ObjectBrowserView } from '@/components/buckets/ObjectBrowserView';
 import { useBucketObjects } from '@/hooks/useBucketObjects';
 import { useBuckets } from '@/hooks/useApi';
@@ -26,13 +26,16 @@ export function BucketObjects() {
     parseInt(searchParams.get('limit') ?? '25', 10),
   );
 
-  useEffect(() => {
+  // Re-sync from the URL when it changes (back/forward navigation) — done as a
+  // state adjustment during render rather than an effect.
+  const [prevSearchParams, setPrevSearchParams] = useState(searchParams);
+  if (searchParams !== prevSearchParams) {
+    setPrevSearchParams(searchParams);
     const prefix = searchParams.get('prefix') ?? '';
     if (prefix !== currentPath) setCurrentPath(prefix);
     setInitialPageToken(searchParams.get('page') ?? undefined);
     setInitialItemsPerPage(parseInt(searchParams.get('limit') ?? '25', 10));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }
 
   const {
     objects,

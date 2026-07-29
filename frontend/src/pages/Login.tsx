@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '@/store/auth-store';
 import { BasicLoginForm } from '@/components/auth/BasicLoginForm';
 import { OIDCLoginView } from '@/components/auth/OIDCLoginView';

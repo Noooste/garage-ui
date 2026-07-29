@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { AlertTriangle, Gauge, Info } from 'lucide-react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useBuckets, useDeleteBucket, useUpdateBucketQuotas } from '@/hooks/useApi';
@@ -98,7 +98,6 @@ export function BucketSettings() {
     control,
     register,
     handleSubmit,
-    watch,
     reset,
     formState: { errors, isDirty, isSubmitting },
   } = useForm<QuotaFormValues>({
@@ -106,13 +105,15 @@ export function BucketSettings() {
     values: defaults,
   });
 
-  const watched = watch();
+  // useWatch rather than watch(): same values, but compatible with React
+  // Compiler memoization (watch() reads mutable form state during render).
+  const watched = useWatch({ control });
 
   const currentSize = bucket?.size ?? 0;
   const currentObjects = bucket?.objectCount ?? 0;
 
   const newMaxSizeBytes =
-    watched.maxSizeEnabled && watched.maxSizeValue !== '' && !Number.isNaN(Number(watched.maxSizeValue))
+    watched.maxSizeEnabled && watched.maxSizeUnit && watched.maxSizeValue !== '' && !Number.isNaN(Number(watched.maxSizeValue))
       ? quotaValueToBytes(Number(watched.maxSizeValue), watched.maxSizeUnit)
       : null;
   const newMaxObjects =

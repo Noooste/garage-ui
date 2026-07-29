@@ -65,9 +65,12 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       return currentValue;
     }, [value, internalValue, children, placeholder]);
 
-    React.useEffect(() => {
+    // Track the controlled value in internal state (adjust-during-render).
+    const [prevValue, setPrevValue] = React.useState(value);
+    if (value !== prevValue) {
+      setPrevValue(value);
       setInternalValue(value);
-    }, [value]);
+    }
 
     // The popup is portalled to the body so an ancestor with overflow-hidden
     // (a dialog card, a scroll container) cannot clip it.

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { bucketsApi, objectsApi, accessApi, garageApi, analyticsApi } from '@/lib/api';
+import type { BucketPermission } from '@/types';
 import { queryKeys } from '@/lib/query-client';
 import { toast } from 'sonner';
 
@@ -173,7 +174,7 @@ export function useCreateAccessKey() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ name, permissions }: { name: string; permissions?: any[] }) =>
+    mutationFn: ({ name, permissions }: { name: string; permissions?: BucketPermission[] }) =>
       accessApi.createKey(name, permissions),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.all });
@@ -199,7 +200,7 @@ export function useUpdateAccessKey() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ keyId, updates }: { keyId: string; updates: any }) =>
+    mutationFn: ({ keyId, updates }: { keyId: string; updates: { name?: string; status?: 'active' | 'inactive'; expiration?: string } }) =>
       accessApi.updateKey(keyId, updates),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.accessKeys.detail(variables.keyId) });

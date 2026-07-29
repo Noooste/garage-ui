@@ -1,5 +1,5 @@
 import { AlertCircle, Database, FolderOpen, HardDrive, Server, Zap } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { PageHeader } from '@/components/ui/page-header';
 import { IconTile } from '@/components/ui/icon-tile';
 import { EmptyState } from '@/components/ui/empty-state';

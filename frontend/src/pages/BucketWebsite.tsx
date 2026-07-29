@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Globe } from 'lucide-react';
 import { useBuckets } from '@/hooks/useApi';
@@ -22,13 +22,24 @@ export function BucketWebsite() {
   const [errorDocument, setErrorDocument] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Sync local form state whenever the underlying bucket changes.
-  useEffect(() => {
-    if (!bucket) return;
+  // Sync local form state whenever the underlying bucket changes (adjust
+  // during render, not an effect). Starts at null so the first render with
+  // bucket data populates the form.
+  const websiteKey = bucket
+    ? JSON.stringify([
+        bucket.name,
+        bucket.websiteAccess,
+        bucket.websiteConfig?.indexDocument ?? null,
+        bucket.websiteConfig?.errorDocument ?? null,
+      ])
+    : null;
+  const [prevWebsiteKey, setPrevWebsiteKey] = useState<string | null>(null);
+  if (bucket && websiteKey !== prevWebsiteKey) {
+    setPrevWebsiteKey(websiteKey);
     setEnabled(bucket.websiteAccess);
     setIndexDocument(bucket.websiteConfig?.indexDocument ?? 'index.html');
     setErrorDocument(bucket.websiteConfig?.errorDocument ?? '');
-  }, [bucket?.name, bucket?.websiteAccess, bucket?.websiteConfig?.indexDocument, bucket?.websiteConfig?.errorDocument]);
+  }
 
   if (isLoading) {
     return <div className="px-7 py-6 text-[13.5px] text-[var(--muted-foreground)]">Loading…</div>;

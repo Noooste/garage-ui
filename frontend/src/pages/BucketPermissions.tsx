@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useParams } from 'react-router';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import { useAccessKeys, useGrantBucketPermission } from '@/hooks/useApi';
+import type { AccessKey } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectOption } from '@/components/ui/select';
@@ -9,9 +10,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
+// Stable fallback so the render-adjust below doesn't see a fresh array
+// identity on every render while the keys are still loading.
+const NO_KEYS: AccessKey[] = [];
+
 export function BucketPermissions() {
   const { bucketName = '' } = useParams<{ bucketName: string }>();
-  const { data: availableKeys = [] } = useAccessKeys();
+  const { data: availableKeys = NO_KEYS } = useAccessKeys();
   const grant = useGrantBucketPermission();
 
   const [selectedKey, setSelectedKey] = useState('');
@@ -19,19 +24,27 @@ export function BucketPermissions() {
   const [write, setWrite] = useState(false);
   const [owner, setOwner] = useState(false);
 
-  useEffect(() => {
+  // Prefill the checkboxes from the selected key's existing grant (adjust
+  // during render, not an effect).
+  const [prevSync, setPrevSync] = useState({ selectedKey, availableKeys, bucketName });
+  if (
+    prevSync.selectedKey !== selectedKey ||
+    prevSync.availableKeys !== availableKeys ||
+    prevSync.bucketName !== bucketName
+  ) {
+    setPrevSync({ selectedKey, availableKeys, bucketName });
     if (!selectedKey) {
       setRead(false); setWrite(false); setOwner(false);
-      return;
+    } else {
+      const key = availableKeys.find((k) => k.accessKeyId === selectedKey);
+      const existing = key?.permissions.find(
+        (p) => p.bucketName === bucketName || p.bucketId === bucketName,
+      );
+      setRead(existing?.read ?? false);
+      setWrite(existing?.write ?? false);
+      setOwner(existing?.owner ?? false);
     }
-    const key = availableKeys.find((k) => k.accessKeyId === selectedKey);
-    const existing = key?.permissions.find(
-      (p) => p.bucketName === bucketName || p.bucketId === bucketName,
-    );
-    setRead(existing?.read ?? false);
-    setWrite(existing?.write ?? false);
-    setOwner(existing?.owner ?? false);
-  }, [selectedKey, availableKeys, bucketName]);
+  }
 
   const canSubmit = !!selectedKey && (read || write || owner) && !grant.isPending;
 

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { User, LogOut, Monitor, Moon, Sun } from 'lucide-react';
 import { Breadcrumb, type BreadcrumbItem } from '@/components/ui/breadcrumb';
-import { useTheme } from '@/components/theme-provider';
+import { useTheme } from '@/components/theme-context';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
 

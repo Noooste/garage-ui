@@ -146,15 +146,17 @@ describe('useObjectPreview', () => {
   it('ignores a pending text decode after unmount', async () => {
     let resolveText: (value: string) => void = () => {};
     const blob = new Blob(['hello']);
-    vi.spyOn(blob, 'text').mockReturnValue(new Promise<string>((res) => { resolveText = res; }));
+    const textSpy = vi.spyOn(blob, 'text').mockReturnValue(new Promise<string>((res) => { resolveText = res; }));
     mockedGet.mockResolvedValue(blob);
     const { result, unmount } = renderHook(() => useObjectPreview('b', 'a.txt', 5, 'text/plain'), { wrapper: createWrapper() });
-    await waitFor(() => expect(result.current.objectUrl).toBe('blob:mock-url'));
+    await waitFor(() => expect(textSpy).toHaveBeenCalled());
 
     // Unmount before the decode resolves, then resolve it. The cancelled
-    // guard must swallow the late result rather than set state.
+    // guard must swallow the late result rather than set state, and the
+    // never-committed object url must still be revoked.
     unmount();
     act(() => resolveText('hello'));
     expect(result.current.text).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
   });
 });

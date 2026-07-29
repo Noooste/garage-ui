@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useParams } from 'react-router-dom';
+import { NavLink, Outlet, useParams } from 'react-router';
 import { Database, Copy, Upload } from 'lucide-react';
 import { IconTile } from '@/components/ui/icon-tile';
 import { Button } from '@/components/ui/button';

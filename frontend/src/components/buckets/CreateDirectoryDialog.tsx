@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,12 @@ interface CreateDirectoryDialogProps {
 export function CreateDirectoryDialog({ open, onOpenChange, currentPath, onCreateDirectory }: CreateDirectoryDialogProps) {
   const [dirName, setDirName] = useState('');
 
-  useEffect(() => { if (!open) setDirName(''); }, [open]);
+  // Clear the field when the dialog closes (adjust-during-render, not an effect).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (!open) setDirName('');
+  }
 
   const handleCreate = async () => {
     if (!dirName) {

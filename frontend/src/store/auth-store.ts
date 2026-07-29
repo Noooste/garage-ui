@@ -64,7 +64,7 @@ export const useAuthStore = create<AuthStore>()(
               isAuthenticated: true,
               isLoading: false
             });
-          } catch (error) {
+          } catch {
             // Not authenticated - this is okay
             set({
               user: null,
