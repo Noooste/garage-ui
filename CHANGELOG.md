@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.11.0](https://github.com/Noooste/garage-ui/compare/v0.10.0...v0.11.0) (2026-07-29)
+
+
+### Features
+
+* **bucket:** add functionality to create buckets with optional access keys and permissions ([6766dec](https://github.com/Noooste/garage-ui/commit/6766dec933f85ece64d89875ccc147c069669a0c))
+* **dropdown:** improve positioning logic and add popup positioning utility ([985b7b3](https://github.com/Noooste/garage-ui/commit/985b7b30ce1cc450f621169068efcfa1dccd2a25))
+* **frontend:** make bucket items clickable links to object view ([a061500](https://github.com/Noooste/garage-ui/commit/a061500d50ddd1ec1cc713c06fd24a9b9f1511ed))
+
+
+### Bug Fixes
+
+* **backend:** handle gzip decompression for API responses ([928242a](https://github.com/Noooste/garage-ui/commit/928242a7383b99cfcd678d0f60c8771d12568b98))
+
 ## [0.10.0](https://github.com/Noooste/garage-ui/compare/v0.9.0...v0.10.0) (2026-07-14)
 
 
