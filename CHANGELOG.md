@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/Noooste/garage-ui/compare/v0.11.0...v0.11.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **values.yaml:** add comments for team-based access control configuration ([987b7e8](https://github.com/Noooste/garage-ui/commit/987b7e862513fedc4a0173d60b26ac6ad59a5db0))
+
 ## [0.11.0](https://github.com/Noooste/garage-ui/compare/v0.10.0...v0.11.0) (2026-07-29)
 
 
