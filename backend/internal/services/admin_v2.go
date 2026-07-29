@@ -3,12 +3,11 @@ package services
 import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/pkg/utils"
 	logpkg "Noooste/garage-ui/pkg/logger"
+	"Noooste/garage-ui/pkg/utils"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -63,17 +62,38 @@ func (s *GarageV2AdminService) doRequest(ctx context.Context, method, path strin
 	return resp, nil
 }
 
-// decodeResponse decodes a JSON response into the target structure
+// readResponseBody reads and decompresses the response body.
+//
+// doRequest sets IgnoreBody, so azuretls does not read or decompress the body
+// for us. Over HTTP/1.1 the underlying transport transparently gunzips the body
+// and clears Content-Encoding, but over HTTP/2 (e.g. Garage behind a reverse
+// proxy) the body is delivered still-compressed with Content-Encoding set. We
+// therefore decode according to that header before touching the payload;
+// otherwise a gzip'd body reaches the JSON parser as raw bytes and fails with
+// "invalid character '\x1f'" (0x1f is the gzip magic byte). See issue #95.
+func readResponseBody(resp *azuretls.Response) ([]byte, error) {
+	bodyBytes, err := azuretls.DecodeResponseBody(resp.RawBody, resp.Header.Get("Content-Encoding"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	return bodyBytes, nil
+}
+
+// decodeResponse decodes a JSON response into the target structure.
 func decodeResponse(resp *azuretls.Response, target interface{}) error {
 	defer resp.RawBody.Close()
 
+	bodyBytes, err := readResponseBody(resp)
+	if err != nil {
+		return err
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.RawBody)
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	if target != nil {
-		if err := json.NewDecoder(resp.RawBody).Decode(target); err != nil {
+		if err := json.Unmarshal(bodyBytes, target); err != nil {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}
@@ -535,14 +555,13 @@ func (s *GarageV2AdminService) GetMetrics(ctx context.Context) (string, error) {
 	}
 	defer resp.RawBody.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.RawBody)
-		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	bodyBytes, err := readResponseBody(resp)
+	if err != nil {
+		return "", err
 	}
 
-	bodyBytes, err := io.ReadAll(resp.RawBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	return string(bodyBytes), nil

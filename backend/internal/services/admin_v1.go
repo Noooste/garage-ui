@@ -3,11 +3,10 @@ package services
 import (
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/models"
-	"Noooste/garage-ui/pkg/utils"
 	logpkg "Noooste/garage-ui/pkg/logger"
+	"Noooste/garage-ui/pkg/utils"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -363,13 +362,12 @@ func (s *GarageV1AdminService) GetMetrics(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.RawBody.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.RawBody)
-		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-	bodyBytes, err := io.ReadAll(resp.RawBody)
+	bodyBytes, err := readResponseBody(resp)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return "", err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 	return string(bodyBytes), nil
 }
