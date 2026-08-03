@@ -67,6 +67,11 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
     const { open, onOpenChange, size } = useDialog();
     const containerRef = React.useRef<HTMLDivElement>(null);
 
+    const onOpenChangeRef = React.useRef(onOpenChange);
+    React.useEffect(() => {
+      onOpenChangeRef.current = onOpenChange;
+    });
+
     React.useEffect(() => {
       if (!open) return;
       const previouslyFocused = document.activeElement as HTMLElement | null;
@@ -74,7 +79,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
       const keyHandler = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           e.stopPropagation();
-          onOpenChange(false);
+          onOpenChangeRef.current(false);
           return;
         }
         if (e.key !== 'Tab' || !containerRef.current) return;
@@ -105,7 +110,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
         document.removeEventListener('keydown', keyHandler);
         previouslyFocused?.focus?.();
       };
-    }, [open, onOpenChange]);
+    }, [open]);
 
     if (!open) return null;
 
