@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ObjectPreview } from '@/components/buckets/ObjectPreview';
 import { ArrowLeft, ChevronRight, Copy, Download, File, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { copyText } from '@/lib/clipboard';
 import { downloadObject, formatBytes } from '@/lib/file-utils';
 import { formatDate } from '@/lib/utils';
 
@@ -90,9 +91,9 @@ export function ObjectDetailsView() {
   const backHref = `/buckets/${bucketName}/objects${parentPath ? `?prefix=${encodeURIComponent(parentPath + '/')}` : ''}`;
   const pathSegments = parentPath ? parentPath.split('/').filter(Boolean) : [];
 
-  const copy = (text: string, label = 'Copied') => {
-    navigator.clipboard.writeText(text);
-    toast.success(label);
+  const copy = async (text: string, label = 'Copied') => {
+    if (await copyText(text)) toast.success(label);
+    else toast.error('Failed to copy');
   };
 
   const handleDownload = () => {

@@ -4,6 +4,7 @@ import { IconTile } from '@/components/ui/icon-tile';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { copyText } from '@/lib/clipboard';
 import { useBuckets } from '@/hooks/useApi';
 import { useBucketCan } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
@@ -43,12 +44,8 @@ export function BucketDetailShell() {
 
   const s3Url = `s3://${bucketName}`;
   const copyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(s3Url);
-      toast.success('URL copied');
-    } catch {
-      toast.error('Failed to copy');
-    }
+    if (await copyText(s3Url)) toast.success('URL copied');
+    else toast.error('Failed to copy');
   };
 
   return (

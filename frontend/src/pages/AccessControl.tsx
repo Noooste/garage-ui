@@ -1,5 +1,6 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useState, type MouseEvent} from 'react';
 import {cn} from '@/lib/utils';
+import {copyText} from '@/lib/clipboard';
 import {PageHeader} from '@/components/ui/page-header';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -35,6 +36,13 @@ import {formatDate} from '@/lib/utils';
 import type {AccessKey, Bucket, BucketPermission} from '@/types';
 import {AlertTriangle, Calendar, Copy, Database, Edit, Key, KeyRound, Loader2, MoreVertical, Plus, Search, ShieldCheck, ShieldX, Trash2,} from 'lucide-react';
 import {toast} from 'sonner';
+
+// Copying must not also open the key's row.
+async function copyAccessKeyId(e: MouseEvent, accessKeyId: string) {
+  e.stopPropagation();
+  if (await copyText(accessKeyId)) toast.success('Access Key ID copied to clipboard');
+  else toast.error('Failed to copy');
+}
 
 export function AccessControl() {
   const queryClient = useQueryClient();
@@ -480,11 +488,7 @@ export function AccessControl() {
                           <div className="flex items-center gap-2">
                             <code
                               className="text-xs bg-muted px-2 py-1 rounded truncate max-w-[150px] block cursor-pointer hover:bg-muted/80 transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(key.accessKeyId);
-                                toast.success('Access Key ID copied to clipboard');
-                              }}
+                              onClick={(e) => copyAccessKeyId(e, key.accessKeyId)}
                             >
                               {key.accessKeyId}
                             </code>
@@ -492,11 +496,7 @@ export function AccessControl() {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(key.accessKeyId);
-                                toast.success('Access Key ID copied to clipboard');
-                              }}
+                              onClick={(e) => copyAccessKeyId(e, key.accessKeyId)}
                             >
                               <Copy className="h-3 w-3" />
                             </Button>

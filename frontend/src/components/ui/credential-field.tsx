@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { copyText } from '@/lib/clipboard';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -21,30 +22,39 @@ export function CredentialField({
 }) {
   const [copied, setCopied] = useState(false);
   const [revealed, setRevealed] = useState(!maskable);
-  const copy = () => {
+  const copy = async () => {
     if (!value) return;
-    navigator.clipboard.writeText(value);
+    if (!(await copyText(value))) {
+      toast.error(`Could not copy ${label}. Select it and copy by hand.`);
+      return;
+    }
     setCopied(true);
     toast.success(`${label} copied`);
     setTimeout(() => setCopied(false), 1600);
   };
+  // Copying focuses a textarea on the fallback path, which would clear whatever
+  // the user just highlighted, so a click that ends a selection copies nothing.
+  const copyUnlessSelecting = () => {
+    if (!window.getSelection()?.toString()) copy();
+  };
   const display = loading ? '' : revealed || !maskable ? value : '•'.repeat(Math.min(40, value.length || 40));
+  const copyable = !loading && !!value;
   return (
     <div className="space-y-1.5">
       <label className="text-[12px] font-medium uppercase tracking-[0.06em] text-[var(--muted-foreground)]">
         {label}
       </label>
       <div className="flex items-stretch gap-2">
-        <button
-          type="button"
-          onClick={copy}
-          disabled={loading || !value}
-          title="Click to copy"
+        {/* A div, not a button: browsers set user-select: none on buttons, which
+            left the value impossible to highlight when copying failed. Keyboard
+            users copy through the button next to it. */}
+        <div
+          onClick={copyable ? copyUnlessSelecting : undefined}
+          title={copyable ? 'Click to copy' : undefined}
           className={cn(
             'flex-1 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface-sunken)]',
-            'px-3 py-2 text-left text-[13.5px] transition-colors hover:bg-[var(--accent)]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]',
-            'disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-[var(--surface-sunken)]',
+            'px-3 py-2 text-[13.5px] transition-colors',
+            copyable ? 'cursor-pointer hover:bg-[var(--accent)]' : 'opacity-70',
             mono && 'font-mono',
             breakAll ? 'break-all' : 'truncate',
           )}
@@ -57,7 +67,7 @@ export function CredentialField({
           ) : (
             display
           )}
-        </button>
+        </div>
         {maskable && (
           <Button
             variant="secondary"
