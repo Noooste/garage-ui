@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.3](https://github.com/Noooste/garage-ui/compare/v0.11.2...v0.11.3) (2026-08-03)
+
+
+### Bug Fixes
+
+* **frontend:** optimize onOpenChange handling to prevent unnecessary re-renders ([b986e00](https://github.com/Noooste/garage-ui/commit/b986e00eb32b795c232a5db39d1cf72ce1882c2d))
+
 ## [0.11.2](https://github.com/Noooste/garage-ui/compare/v0.11.1...v0.11.2) (2026-08-03)
 
 
