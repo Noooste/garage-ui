@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/Noooste/garage-ui/compare/v0.11.1...v0.11.2) (2026-08-03)
+
+
+### Bug Fixes
+
+* **clipboard:** implement copyText utility and refactor copy logic in components ([5b04b34](https://github.com/Noooste/garage-ui/commit/5b04b3483bf22c3fb5ad31d6ebac00bd3f86fb81))
+
 ## [0.11.1](https://github.com/Noooste/garage-ui/compare/v0.11.0...v0.11.1) (2026-07-29)
 
 
