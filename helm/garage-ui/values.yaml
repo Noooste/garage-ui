@@ -14,6 +14,12 @@ fullnameOverride: ""
 
 extraEnvs: []
 
+# Extra volumes for the pod (e.g. a custom CA certificate ConfigMap)
+extraVolumes: []
+
+# Extra volume mounts for the garage-ui container
+extraVolumeMounts: []
+
 # Extra Kubernetes manifests to deploy alongside the chart.
 # Each entry is rendered through `tpl`, so Helm templating is supported.
 # Useful for ExternalSecret, HTTPRoute, CiliumNetworkPolicy, etc.

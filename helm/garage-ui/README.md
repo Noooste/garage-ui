@@ -351,6 +351,38 @@ affinity:
           topologyKey: kubernetes.io/hostname
 ```
 
+#### Custom CA Certificate
+
+If your OIDC provider or Garage endpoint uses a certificate signed by a private CA, mount the CA and point `SSL_CERT_FILE` at it instead of setting `tls_skip_verify: true`. Publicly trusted CAs remain trusted.
+
+```yaml
+extraObjects:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: garage-ui-ca
+    data:
+      ca.crt: |
+        -----BEGIN CERTIFICATE-----
+        ...
+        -----END CERTIFICATE-----
+
+extraVolumes:
+  - name: ca-cert
+    configMap:
+      name: garage-ui-ca
+
+extraVolumeMounts:
+  - name: ca-cert
+    mountPath: /etc/garage-ui/certs/ca.crt
+    subPath: ca.crt
+    readOnly: true
+
+extraEnvs:
+  - name: SSL_CERT_FILE
+    value: /etc/garage-ui/certs/ca.crt
+```
+
 ### Complete Parameters Reference
 
 For a complete list of all available parameters, see the [values.yaml](values.yaml) file which includes detailed comments for every configuration option.
