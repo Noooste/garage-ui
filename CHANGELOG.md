@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/Noooste/garage-ui/compare/v0.11.3...v0.12.0) (2026-08-07)
+
+
+### Features
+
+* **deployment:** add support for custom CA certificates and extra volumes in Helm chart ([9d9a446](https://github.com/Noooste/garage-ui/commit/9d9a446464cf83b97035a848f38da9dcb96060f5))
+
 ## [0.11.3](https://github.com/Noooste/garage-ui/compare/v0.11.2...v0.11.3) (2026-08-03)
 
 
