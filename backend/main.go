@@ -163,14 +163,7 @@ func main() {
 	if maxBodySize == 0 {
 		maxBodySize = 300 * 1024 * 1024 // 300MB default
 	}
-	maxHeaderSize := cfg.Server.MaxHeaderSize
-	if maxHeaderSize == 0 {
-		maxHeaderSize = 1 * 1024 * 1024 // 1MB default
-	}
-	readBufferSize := cfg.Server.ReadBufferSize
-	if readBufferSize == 0 {
-		readBufferSize = 4096 // 4KB default
-	}
+	readBufferSize := resolveReadBufferSize(cfg.Server.ReadBufferSize, cfg.Server.MaxHeaderSize)
 	writeBufferSize := cfg.Server.WriteBufferSize
 	if writeBufferSize == 0 {
 		writeBufferSize = 4096 // 4KB default
@@ -179,8 +172,8 @@ func main() {
 	logger.Info().
 		Int64("max_body_bytes", maxBodySize).
 		Float64("max_body_mb", float64(maxBodySize)/(1024*1024)).
-		Int("max_header_bytes", maxHeaderSize).
-		Float64("max_header_kb", float64(maxHeaderSize)/1024).
+		Int("max_header_bytes", readBufferSize).
+		Float64("max_header_kb", float64(readBufferSize)/1024).
 		Msg("Server request limits configured")
 
 	// Create Fiber app with configuration
@@ -258,6 +251,22 @@ func main() {
 	logger.Info().
 		Dur("shutdown_duration", time.Since(shutdownStart)).
 		Msg("Server stopped gracefully")
+}
+
+// Sized to fit the identity headers auth proxies forward upstream.
+const defaultReadBufferSize = 32 * 1024
+
+// resolveReadBufferSize returns the read buffer size to hand to Fiber. fasthttp
+// caps request headers by the read buffer, so max_header_size only takes effect
+// through it.
+func resolveReadBufferSize(readBufferSize, maxHeaderSize int) int {
+	if readBufferSize <= 0 {
+		readBufferSize = defaultReadBufferSize
+	}
+	if maxHeaderSize > readBufferSize {
+		return maxHeaderSize
+	}
+	return readBufferSize
 }
 
 // customErrorHandler handles errors globally. It uses the per-request logger

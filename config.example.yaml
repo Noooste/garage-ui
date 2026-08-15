@@ -11,8 +11,8 @@ server:
 
   # Request size limits (in bytes)
   max_body_size: 314572800 # 300MB - Maximum request body size (increase for large file uploads)
-  max_header_size: 1048576 # 1MB - Maximum request header size
-  read_buffer_size: 4096 # 4KB - Read buffer size
+  max_header_size: 32768 # 32KB - raise if an auth proxy's headers cause HTTP 431
+  read_buffer_size: 32768 # 32KB - Read buffer; also caps total header size
   write_buffer_size: 4096 # 4KB - Write buffer size
 
 # Garage S3 Configuration
