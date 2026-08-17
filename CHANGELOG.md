@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.1](https://github.com/Noooste/garage-ui/compare/v0.12.0...v0.12.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* **backend:** improve cache control headers for static file serving ([e4e9994](https://github.com/Noooste/garage-ui/commit/e4e9994ac67d9b051f25b7bb2899c05980d13aca))
+* **backend:** update request size limits for improved header handling ([367338a](https://github.com/Noooste/garage-ui/commit/367338af7c2f2a913205c1252fa5a84fed791eaa))
+* **deps:** update package-lock.json ([e3ad1ab](https://github.com/Noooste/garage-ui/commit/e3ad1ab186fb78a649f61ece81d488a4cfaf819e))
+* **frontend:** Bucket usage chart tooltip text color ([#112](https://github.com/Noooste/garage-ui/issues/112)) ([0863374](https://github.com/Noooste/garage-ui/commit/086337416b27448ea7047ace076d722c7f83d7d4))
+
 ## [0.12.0](https://github.com/Noooste/garage-ui/compare/v0.11.3...v0.12.0) (2026-08-07)
 
 
