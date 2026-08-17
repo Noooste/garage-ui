@@ -355,10 +355,15 @@ func SetupRoutes(
 			// Try to serve static files first
 			filePath := filepath.Join(cfg.Server.FrontendPath, path)
 			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+				if strings.HasPrefix(path, "/assets/") {
+					c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
+				} else {
+					c.Set(fiber.HeaderCacheControl, "no-cache")
+				}
 				return c.SendFile(filePath)
 			}
 
-			// If no static file exists, serve index.html for SPA routing
+			c.Set(fiber.HeaderCacheControl, "no-cache")
 			indexPath := filepath.Join(cfg.Server.FrontendPath, "index.html")
 			return c.SendFile(indexPath)
 		})
