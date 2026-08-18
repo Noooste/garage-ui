@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -603,10 +604,18 @@ func TestRoutes_SPAFallback_WithFrontend_ServesIndexForUnknownPath(t *testing.T)
 	// Unknown SPA path → serves index.html.
 	req := httptest.NewRequest("GET", "/deep/spa/route", nil)
 	resp := expectStatus(t, f.App, req, 200)
-	body := make([]byte, 64)
-	n, _ := resp.Body.Read(body)
-	if !strings.Contains(string(body[:n]), "spa") {
-		t.Errorf("body = %q, want index.html content", string(body[:n]))
+	// index.html is rewritten on the way out (base path injection), so read the
+	// whole body rather than a fixed prefix.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	_ = resp.Body.Close()
+	if !strings.Contains(string(body), "spa") {
+		t.Errorf("body = %q, want index.html content", string(body))
+	}
+	if !strings.HasPrefix(string(body), "<!doctype html>") {
+		t.Errorf("body = %q, want the doctype to stay first", string(body))
 	}
 
 	// API prefix is skipped by the fallback → still 404 for unknown API path.

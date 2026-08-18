@@ -31,6 +31,7 @@ type ServerConfig struct {
 	Domain          string `mapstructure:"domain"`            // Domain name (e.g., garage-ui.example.com)
 	Protocol        string `mapstructure:"protocol"`          // Protocol for internal communication (http/https)
 	RootURL         string `mapstructure:"root_url"`          // Full external URL for redirects (e.g., https://garage-ui.example.com)
+	BasePath        string `mapstructure:"base_path"`         // Subpath the app is served under behind a reverse proxy (e.g., /garage-ui); empty = root
 	MaxBodySize     int64  `mapstructure:"max_body_size"`     // Maximum request body size in bytes (default: 300MB)
 	MaxHeaderSize   int    `mapstructure:"max_header_size"`   // Maximum request header size in bytes (default: 1MB)
 	ReadBufferSize  int    `mapstructure:"read_buffer_size"`  // Read buffer size in bytes (default: 4KB)
@@ -256,6 +257,14 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 		cfg.AccessControl = &AccessControlConfig{}
 	}
 
+	// Canonicalise the base path once here so every consumer (routes, OIDC
+	// redirect URIs, SPA fallback) reads the same "" or "/prefix" form.
+	normalizedBasePath, err := NormalizeBasePath(cfg.Server.BasePath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+	cfg.Server.BasePath = normalizedBasePath
+
 	// Validate the configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -274,6 +283,7 @@ func bindEnvVars() {
 	viper.BindEnv("server.domain", "GARAGE_UI_SERVER_DOMAIN")
 	viper.BindEnv("server.protocol", "GARAGE_UI_SERVER_PROTOCOL")
 	viper.BindEnv("server.root_url", "GARAGE_UI_SERVER_ROOT_URL")
+	viper.BindEnv("server.base_path", "GARAGE_UI_SERVER_BASE_PATH")
 	viper.BindEnv("server.max_body_size", "GARAGE_UI_SERVER_MAX_BODY_SIZE")
 	viper.BindEnv("server.max_header_size", "GARAGE_UI_SERVER_MAX_HEADER_SIZE")
 	viper.BindEnv("server.read_buffer_size", "GARAGE_UI_SERVER_READ_BUFFER_SIZE")
@@ -382,6 +392,9 @@ func (c *Config) Validate() error {
 	// Validate server config
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
+	}
+	if _, err := NormalizeBasePath(c.Server.BasePath); err != nil {
+		return err
 	}
 
 	// Validate Garage config

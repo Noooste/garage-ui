@@ -147,6 +147,33 @@ If your environment needs explicit IPv4-only binding, set `server.host: "0.0.0.0
 
 See [config.example.yaml](config.example.yaml) for all options including authentication, CORS, and logging.
 
+### Serving from a subpath
+
+Set `server.base_path` (or `GARAGE_UI_SERVER_BASE_PATH`) to run Garage UI behind a reverse proxy that routes by path — useful when one hostname has to carry several services, e.g. a Tailscale node with `tailscale serve`.
+
+```yaml
+server:
+  base_path: "/garage-ui"
+  root_url: "https://my-node.tailnet.ts.net" # host only; base_path is appended
+```
+
+```bash
+tailscale serve --set-path /garage-ui http://localhost:8080
+```
+
+The prefix is **accepted, not required**: routes stay registered at the root and an incoming prefix is stripped. That covers both kinds of reverse proxy without extra configuration —
+
+- proxies that strip the mount point before forwarding (`tailscale serve`, Traefik's `StripPrefix`, the usual Kubernetes `rewrite-target`)
+- proxies that pass the full path through (nginx `proxy_pass http://backend;` without a URI part)
+
+What `base_path` changes is everything the browser is told:
+
+- `index.html` is rewritten at request time with `<base href="/garage-ui/">`, so the (relative) asset URLs resolve under the prefix on any route depth
+- the SPA reads the prefix from an injected `<meta name="garage-ui-base-path">` and uses it for the router basename, the API base URL and full-page redirects
+- the OIDC redirect URI becomes `{root_url}{base_path}/auth/oidc/callback` — register that exact URI with your provider
+
+No rebuild is needed: the published image is base-path agnostic. `/health` keeps answering unprefixed as well, so container and orchestrator probes work unchanged. Trailing slashes are normalized, so `/garage-ui/` and `garage-ui` both work.
+
 ### Environment Variables
 
 Override any config value with `GARAGE_UI_` prefix:
@@ -155,6 +182,7 @@ Override any config value with `GARAGE_UI_` prefix:
 GARAGE_UI_SERVER_PORT=8080
 GARAGE_UI_GARAGE_ENDPOINT=http://garage:3900
 GARAGE_UI_GARAGE_ADMIN_TOKEN=your-token
+GARAGE_UI_SERVER_BASE_PATH=/garage-ui   # optional: serve from a subpath
 ```
 
 #### Loading sensitive values from files (`_FILE` suffix)
