@@ -136,7 +136,7 @@ update: prod-pull prod-restart
 
 .DEFAULT_GOAL := help
 
-.PHONY: test test-race test-cover test-smoke
+.PHONY: test test-race test-cover test-smoke test-frontend
 
 ## test: Run backend unit tests
 test:
@@ -150,6 +150,10 @@ test-race:
 test-cover:
 	cd backend && go test -coverprofile=../coverage.out -coverpkg=./... ./...
 	bash scripts/coverage-gate.sh coverage.out
+
+## test-frontend: Run the frontend unit tests
+test-frontend:
+	cd frontend && npm test
 
 ## test-smoke: Run the docker compose smoke test (requires Docker + compose v2)
 test-smoke:
