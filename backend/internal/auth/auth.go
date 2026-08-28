@@ -89,9 +89,11 @@ func (a *Service) initOIDC() error {
 	}
 	a.oidcVerifier = provider.Verifier(verifierConfig)
 
-	// Construct redirect URL from server config
-	// Use root_url if set, otherwise construct from protocol/domain
-	redirectURL := a.serverConfig.RootURL + "/auth/oidc/callback"
+	// Construct redirect URL from server config: root_url + the configured
+	// base path + the callback route. Behind a path-routing reverse proxy the
+	// IdP must be sent to {root_url}{base_path}/auth/oidc/callback, which is
+	// also the URI that has to be registered with the provider.
+	redirectURL := a.serverConfig.ExternalURL("/auth/oidc/callback")
 
 	// Create OAuth2 config
 	a.oauth2Config = &oauth2.Config{

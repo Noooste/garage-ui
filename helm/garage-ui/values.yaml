@@ -49,6 +49,12 @@ config:
     protocol: "http"
     # Full external URL (required for OIDC)
     root_url: "https://garage-ui.example.com"
+    # Subpath to serve from when the ingress does path-based routing
+    # (e.g. "/garage-ui"). Empty serves from the root. The prefix is accepted,
+    # not required, so an ingress with rewrite-target works as well as one that
+    # forwards the full path. The OIDC redirect URI becomes
+    # {root_url}{base_path}/auth/oidc/callback. Probes keep using /health.
+    base_path: ""
     # Request size limits (in bytes)
     max_body_size: 314572800  # 300MB
     max_header_size: 32768    # 32KB - raise if an auth proxy's headers cause HTTP 431

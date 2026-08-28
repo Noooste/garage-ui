@@ -18,6 +18,7 @@ import type {
   StorageMetrics,
 } from '@/types';
 import type { AuthUser } from '@/types/auth';
+import { withBasePath } from '@/lib/base-path';
 
 // Helper function to encode object keys for URLs
 // Encodes the entire key including slashes to ensure proper handling of special characters
@@ -25,8 +26,10 @@ const encodeObjectKey = (key: string): string => {
   return encodeURIComponent(key);
 };
 
+// Behind a path-routing reverse proxy the backend is mounted under a prefix
+// (issue #107), so every client-built URL has to carry it.
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: withBasePath('/api'),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -34,7 +37,7 @@ const api = axios.create({
 
 // Separate axios instance for auth endpoints (which are not under /api)
 const authApiClient = axios.create({
-  baseURL: '/auth',
+  baseURL: withBasePath('/auth'),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -81,8 +84,9 @@ api.interceptors.response.use(
       localStorage.removeItem('auth-token');
 
       // Only redirect if not already on login page
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      const loginPath = withBasePath('/login');
+      if (window.location.pathname !== loginPath) {
+        window.location.href = loginPath;
       }
 
       return Promise.reject(error);
@@ -169,7 +173,7 @@ export const authApi = {
   },
 
   loginOIDC: () => {
-    window.location.href = '/auth/oidc/login';
+    window.location.href = withBasePath('/auth/oidc/login');
   },
 };
 

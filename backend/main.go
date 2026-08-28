@@ -100,6 +100,7 @@ func main() {
 		Str("version", version).
 		Str("go_version", runtime.Version()).
 		Str("environment", cfg.Server.Environment).
+		Str("base_path", cfg.Server.NormalizedBasePath()).
 		Msg("Starting Garage UI Backend")
 
 	if *garageTomlPath != "" {
