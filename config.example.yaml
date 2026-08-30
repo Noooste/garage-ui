@@ -148,4 +148,4 @@ cors:
 # The application uses zerolog for structured logging
 logging:
   level: "info" # Options: debug, info, warn, error
-  format: "text" or "json"
+  format: "text" # Options: text or json
