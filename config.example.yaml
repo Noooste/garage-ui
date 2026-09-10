@@ -9,6 +9,20 @@ server:
   protocol: "http" # Protocol for internal communication (http/https)
   root_url: "http://localhost:8080" # Full external URL for OAuth2 redirects (adjust for production)
 
+  # Subpath the app is served under behind a path-routing reverse proxy
+  # (e.g. `tailscale serve --set-path /garage-ui`, or an nginx location block).
+  # Empty (the default) serves from the root.
+  #
+  # The prefix is accepted, not required: routes stay at the root and an
+  # incoming prefix is stripped, so proxies that strip the mount point
+  # (tailscale serve, Traefik StripPrefix, k8s rewrite-target) and proxies that
+  # forward it (nginx proxy_pass) both work without further configuration.
+  # What this changes is what the browser is told: the asset base href, the
+  # SPA's router/API base, and the OIDC redirect URI — all injected at request
+  # time, so no rebuild is needed.
+  # Env var: GARAGE_UI_SERVER_BASE_PATH
+  base_path: "" # e.g. "/garage-ui"
+
   # Request size limits (in bytes)
   max_body_size: 314572800 # 300MB - Maximum request body size (increase for large file uploads)
   max_header_size: 32768 # 32KB - raise if an auth proxy's headers cause HTTP 431
@@ -54,7 +68,7 @@ auth:
 
   # OIDC Configuration
   # NOTE: When OIDC is enabled, server.root_url is required for OAuth2 redirects
-  # The redirect URL will be automatically constructed as: {root_url}/auth/oidc/callback
+  # The redirect URL will be automatically constructed as: {root_url}{base_path}/auth/oidc/callback
   oidc:
     enabled: false # Set to true to enable OIDC login
     provider_name: "Keycloak"

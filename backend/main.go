@@ -100,6 +100,7 @@ func main() {
 		Str("version", version).
 		Str("go_version", runtime.Version()).
 		Str("environment", cfg.Server.Environment).
+		Str("base_path", cfg.Server.NormalizedBasePath()).
 		Msg("Starting Garage UI Backend")
 
 	if *garageTomlPath != "" {
@@ -187,8 +188,10 @@ func main() {
 
 	// Apply global middleware (order matters):
 	//   1. recover — must be outermost so panics become 500s.
-	//   2. RequestID — mints/reads X-Request-ID before any logger needs it.
-	//   3. Logging — builds per-request zerolog logger + emits access log.
+	//   2. StripBasePath — re-routes prefixed requests, replaying the chain, so
+	//      everything that must run once per request comes after it.
+	//   3. RequestID — mints/reads X-Request-ID before any logger needs it.
+	//   4. Logging — builds per-request zerolog logger + emits access log.
 	// Auth middleware is installed per-route inside routes.SetupRoutes.
 	app.Use(recover.New(recover.Config{
 		EnableStackTrace: true,
@@ -199,6 +202,10 @@ func main() {
 				Msg("panic_recovered")
 		},
 	}))
+	// StripBasePath goes here, not inside SetupRoutes: it re-routes the request
+	// via RestartRouting, which replays the whole middleware chain. Only
+	// handlers registered after it run exactly once per request.
+	app.Use(appmw.StripBasePath(cfg.Server.NormalizedBasePath()))
 	app.Use(appmw.RequestID())
 	app.Use(appmw.Logging(log.Logger))
 

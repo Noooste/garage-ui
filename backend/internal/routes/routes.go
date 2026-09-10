@@ -7,9 +7,11 @@ import (
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/pkg/logger"
+	"html"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -35,6 +37,16 @@ func SetupRoutes(
 ) {
 	// Apply CORS middleware globally
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
+
+	// Subpath support (issue #107): server.base_path is what the browser is
+	// told - the asset base href injected into index.html, the SPA's router and
+	// API base, the OIDC redirect URI and the session cookie scope. Accepting
+	// the prefix on the way in is middleware.StripBasePath's job, installed in
+	// main.go ahead of the request-id and access-log middleware.
+	basePath := cfg.Server.NormalizedBasePath()
+	// Cookie paths need the trailing slash; at the root this is "/", i.e. the
+	// historical default.
+	cookiePath := basePath + "/"
 
 	// Health check endpoint (no auth required)
 	app.Get("/health", healthHandler.Check)
@@ -305,9 +317,14 @@ func SetupRoutes(
 				}
 
 				// Set JWT session token as secure cookie
+				// Scope the session to the deployment's own subtree. Without a
+				// Path the cookie defaults to "/" and the JWT would be sent to
+				// every other service sharing this hostname - which is exactly
+				// the deployment shape base_path exists for.
 				c.Cookie(&fiber.Cookie{
 					Name:     cfg.Auth.OIDC.CookieName,
 					Value:    sessionToken,
+					Path:     cookiePath,
 					MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
 					Secure:   cfg.Auth.OIDC.CookieSecure,
 					HTTPOnly: cfg.Auth.OIDC.CookieHTTPOnly,
@@ -328,7 +345,8 @@ func SetupRoutes(
 				}
 
 				// Redirect to frontend with success indicator
-				return c.Redirect().To("/login?login=success")
+				// Browser-facing, so it carries the public prefix.
+				return c.Redirect().To(config.JoinBasePath(basePath, "/login?login=success"))
 			})
 
 			// Logout endpoint. Clearing the local session leaves the IdP's SSO
@@ -357,6 +375,7 @@ func SetupRoutes(
 				c.Cookie(&fiber.Cookie{
 					Name:   cfg.Auth.OIDC.CookieName,
 					Value:  "",
+					Path:   cookiePath,
 					MaxAge: -1,
 				})
 				c.Cookie(&fiber.Cookie{
@@ -382,6 +401,8 @@ func SetupRoutes(
 
 	// Check if frontend path exists
 	if _, err := os.Stat(cfg.Server.FrontendPath); err == nil {
+		frontendPath := cfg.Server.FrontendPath
+
 		// SPA fallback - serve index.html for all non-API routes
 		app.Use(func(c fiber.Ctx) error {
 			path := c.Path()
@@ -395,9 +416,12 @@ func SetupRoutes(
 				return c.Next()
 			}
 
-			// Try to serve static files first
-			filePath := filepath.Join(cfg.Server.FrontendPath, path)
-			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+			// Try to serve static files first. index.html is deliberately not
+			// served from here: it is the one file that has to go through the
+			// base-path injection below, and requesting it by name would
+			// otherwise hand out the build's placeholder base href.
+			filePath := filepath.Join(frontendPath, path)
+			if info, err := os.Stat(filePath); path != "/index.html" && err == nil && !info.IsDir() {
 				if strings.HasPrefix(path, "/assets/") {
 					c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
 				} else {
@@ -407,8 +431,79 @@ func SetupRoutes(
 			}
 
 			c.Set(fiber.HeaderCacheControl, "no-cache")
-			indexPath := filepath.Join(cfg.Server.FrontendPath, "index.html")
-			return c.SendFile(indexPath)
+			indexPath := filepath.Join(frontendPath, "index.html")
+
+			// The frontend build is deployment-agnostic (relative asset URLs);
+			// the public prefix is injected here at request time, so one image
+			// can serve any subpath without a rebuild.
+			shell, err := os.ReadFile(indexPath)
+			if err != nil {
+				return c.SendFile(indexPath)
+			}
+			c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
+			return c.Send(InjectBasePath(shell, basePath))
 		})
 	}
+}
+
+var (
+	baseHrefRe = regexp.MustCompile(`(?i)<base[^>]*\shref\s*=\s*"[^"]*"[^>]*>`)
+	baseMetaRe = regexp.MustCompile(`(?i)<meta[^>]*\sname\s*=\s*"garage-ui-base-path"[^>]*>`)
+)
+
+// InjectBasePath rewrites index.html so the SPA knows which public prefix it is
+// reached under:
+//
+//	<base href="/prefix/">                              -> asset + relative URL resolution
+//	<meta name="garage-ui-base-path" content="/prefix">  -> router basename, API baseURL, redirects
+//
+// basePath is the normalized form ("" for root, "/prefix" otherwise). Existing
+// tags are replaced; missing ones are inserted after <head>. Serving from the
+// root yields href="/" and an empty content attribute, i.e. the historical
+// behaviour.
+func InjectBasePath(document []byte, basePath string) []byte {
+	// config.NormalizeBasePath already rejects everything that could break out
+	// of an attribute; escaping here is the second layer, and the one that
+	// holds even if this is ever called with an unvalidated value.
+	escaped := html.EscapeString(basePath)
+	baseTag := []byte(`<base href="` + escaped + `/">`)
+	metaTag := []byte(`<meta name="garage-ui-base-path" content="` + escaped + `">`)
+
+	if baseHrefRe.Match(document) {
+		document = baseHrefRe.ReplaceAll(document, baseTag)
+	} else {
+		document = insertIntoHead(document, baseTag)
+	}
+
+	if baseMetaRe.Match(document) {
+		document = baseMetaRe.ReplaceAll(document, metaTag)
+	} else {
+		document = insertIntoHead(document, metaTag)
+	}
+
+	return document
+}
+
+// Insertion anchors in preference order. Anything before the doctype would
+// throw the browser into quirks mode, so a document without <head> still gets
+// the tag after <html> or after the doctype.
+var insertAnchors = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)<head[^>]*>`),
+	regexp.MustCompile(`(?i)<html[^>]*>`),
+	regexp.MustCompile(`(?i)^\s*<!doctype[^>]*>`),
+}
+
+func insertIntoHead(document, tag []byte) []byte {
+	for _, re := range insertAnchors {
+		loc := re.FindIndex(document)
+		if loc == nil {
+			continue
+		}
+		out := make([]byte, 0, len(document)+len(tag))
+		out = append(out, document[:loc[1]]...)
+		out = append(out, tag...)
+		out = append(out, document[loc[1]:]...)
+		return out
+	}
+	return append(tag, document...)
 }

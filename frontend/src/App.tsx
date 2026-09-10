@@ -19,6 +19,7 @@ import {Toaster} from 'sonner';
 import {queryClient} from '@/lib/query-client';
 import {useAuthStore} from '@/store/auth-store';
 import {ProtectedRoute} from '@/components/auth/ProtectedRoute';
+import {routerBasename} from '@/lib/base-path';
 import {LoadingSpinner} from '@/components/auth/LoadingSpinner';
 
 function ThemedToaster() {
@@ -54,7 +55,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="Noooste/garage-ui-theme">
-        <BrowserRouter>
+        {/* basename keeps client-side routing working when the app is served
+            from a subpath (issue #107); it is "/" for a root deployment. */}
+        <BrowserRouter basename={routerBasename()}>
           <Routes>
             <Route path="/login" element={<Login />} />
 
