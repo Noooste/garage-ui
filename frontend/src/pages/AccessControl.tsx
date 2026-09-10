@@ -455,8 +455,8 @@ export function AccessControl() {
                     <TableHead>Name</TableHead>
                     <TableHead className="hidden sm:table-cell">Access Key ID</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="hidden md:table-cell">Created</TableHead>
-                    <TableHead className="hidden md:table-cell">Permissions</TableHead>
+                    <TableHead className="hidden lg:table-cell">Created</TableHead>
+                    <TableHead className="hidden lg:table-cell">Permissions</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -507,8 +507,8 @@ export function AccessControl() {
                             {key.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell">{formatDate(key.createdAt)}</TableCell>
-                        <TableCell className="hidden md:table-cell">
+                        <TableCell className="hidden lg:table-cell">{formatDate(key.createdAt)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {key.permissions.slice(0, 2).map((perm, idx) => (
                               <Badge key={idx} variant="neutral" className="text-xs">

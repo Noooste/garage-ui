@@ -253,16 +253,16 @@ export function ObjectsTable({
           >
             Objects {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
           </TableHead>
-          <TableHead className="hidden sm:table-cell">Type</TableHead>
-          <TableHead className="hidden md:table-cell">Storage Class</TableHead>
+          <TableHead className="hidden lg:table-cell">Type</TableHead>
+          <TableHead className="hidden lg:table-cell">Storage Class</TableHead>
           <TableHead
-            className="cursor-pointer hover:bg-muted/50"
+            className="hidden sm:table-cell cursor-pointer hover:bg-muted/50"
             onClick={() => handleSort('size')}
           >
             Size {sortColumn === 'size' && (sortDirection === 'asc' ? '↑' : '↓')}
           </TableHead>
           <TableHead
-            className="cursor-pointer hover:bg-muted/50"
+            className="hidden sm:table-cell cursor-pointer hover:bg-muted/50"
             onClick={() => handleSort('modified')}
           >
             Modified {sortColumn === 'modified' && (sortDirection === 'asc' ? '↑' : '↓')}
@@ -313,37 +313,37 @@ export function ObjectsTable({
               <TableCell>
                 <div className="flex items-center gap-2">
                   {obj.isFolder ? (
-                    <FolderIcon className="h-4 w-4 text-muted-foreground" />
+                    <FolderIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   ) : (
-                    <FileIcon className="h-4 w-4 text-muted-foreground" />
+                    <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
                   {obj.isFolder ? (
                     <button
                       onClick={() => onNavigateToFolder(obj.key)}
-                      className="font-medium cursor-pointer underline hover:text-primary"
+                      className="font-medium cursor-pointer underline hover:text-primary whitespace-nowrap"
                     >
                       {obj.key.replace(currentPath, '').replace(/\/$/, '')}
                     </button>
                   ) : (
                     <button
                       onClick={() => navigate(`/buckets/${bucketName}/objects/${encodeURIComponent(obj.key)}`)}
-                      className="font-medium cursor-pointer hover:underline hover:text-primary"
+                      className="font-medium cursor-pointer hover:underline hover:text-primary whitespace-nowrap"
                     >
                       {obj.key.replace(currentPath, '')}
                     </button>
                   )}
                 </div>
               </TableCell>
-              <TableCell className="hidden sm:table-cell">
+              <TableCell className="hidden lg:table-cell">
                 {obj.isFolder ? 'Directory' : (obj.contentType || 'application/octet-stream')}
               </TableCell>
-              <TableCell className="hidden md:table-cell">
+              <TableCell className="hidden lg:table-cell">
                 {obj.storageClass && (
                   <Badge variant="neutral">{obj.storageClass}</Badge>
                 )}
               </TableCell>
-              <TableCell>{obj.isFolder ? null : formatBytes(obj.size)}</TableCell>
-              <TableCell>
+              <TableCell className="hidden sm:table-cell">{obj.isFolder ? null : formatBytes(obj.size)}</TableCell>
+              <TableCell className="hidden sm:table-cell">
                 {obj.lastModified ? (() => {
                   const d = new Date(obj.lastModified);
                   return (
@@ -466,7 +466,7 @@ export function ObjectsTable({
 
     {/* Pagination Controls */}
     {(filteredObjects.length > 0 || hasPrevious) && (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 border-t bg-background">
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-4 py-4 border-t bg-background">
         {/* Items per page selector */}
         <div className="flex items-center gap-2 text-sm relative z-10">
           <span className="text-muted-foreground">Items per page:</span>
@@ -480,23 +480,32 @@ export function ObjectsTable({
         </div>
 
         {/* Pagination info and controls */}
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">
+        <div className="flex w-full flex-row items-center justify-center gap-2 sm:w-auto sm:gap-4">
+          <span
+            title={
+              isDeepSearching
+                ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
+                : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`
+            }
+            className="min-w-0 truncate whitespace-nowrap text-left text-sm text-muted-foreground"
+          >
             {isDeepSearching
               ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
               : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`}
           </span>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center justify-center gap-2">
             <Button
               variant="primary"
               size="sm"
               onClick={handlePreviousPage}
               disabled={!hasPrevious}
-              className="h-8"
+              aria-label="Previous page"
+              title="Previous page"
+              className="h-8 shrink-0 whitespace-nowrap"
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
+              <ChevronLeft className="h-4 w-4 shrink-0 mr-0 sm:mr-1" />
+              <span className="hidden sm:inline">Previous</span>
             </Button>
 
             <Button
@@ -504,10 +513,12 @@ export function ObjectsTable({
               size="sm"
               onClick={handleNextPage}
               disabled={!hasNext}
-              className="h-8"
+              aria-label="Next page"
+              title="Next page"
+              className="h-8 shrink-0 whitespace-nowrap"
             >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="h-4 w-4 shrink-0 ml-0 sm:ml-1" />
             </Button>
           </div>
         </div>
