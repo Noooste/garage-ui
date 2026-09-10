@@ -82,6 +82,58 @@ func TestNormalizeBasePath_Rejects(t *testing.T) {
 	}
 }
 
+// Review #1: a base path whose first segment is a route root shadows that
+// route — the prefix is stripped, so GET /api/v1/health becomes /v1/health and
+// GET /health (the container probe) becomes /. Routing is case-insensitive in
+// Fiber by default, so the check has to be too.
+func TestNormalizeBasePath_RejectsReservedFirstSegment(t *testing.T) {
+	for _, raw := range []string{
+		"/api", "api", "/api/", "/auth", "/health", "/docs", "/metrics", "/assets", "/login",
+		"/API", "/Health", "/AsSeTs",
+	} {
+		if got, err := NormalizeBasePath(raw); err == nil {
+			t.Errorf("NormalizeBasePath(%q) = %q, want an error: it would shadow a built-in route", raw, got)
+		}
+	}
+}
+
+// Only the first segment can collide — a reserved word deeper in the path is
+// never a route root.
+func TestNormalizeBasePath_AllowsReservedWordDeeperInThePath(t *testing.T) {
+	for _, tc := range []struct{ raw, want string }{
+		{"/admin/api", "/admin/api"},
+		{"/garage-ui/health", "/garage-ui/health"},
+		{"/apiary", "/apiary"},
+		{"/api-gateway", "/api-gateway"},
+	} {
+		got, err := NormalizeBasePath(tc.raw)
+		if err != nil {
+			t.Errorf("NormalizeBasePath(%q) returned error: %v", tc.raw, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("NormalizeBasePath(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
+// Review #2: the base path is interpolated into HTML attributes. Escaping at
+// the injection site is the actual fix, but characters that have no business in
+// a URL path are rejected here as well, so a payload never gets that far.
+func TestNormalizeBasePath_RejectsHTMLUnsafeCharacters(t *testing.T) {
+	for _, raw := range []string{
+		`/a"><script>alert(1)</script>`,
+		`/a"onload="alert(1)`,
+		`/a'`,
+		`/a&b`,
+		"/a`b",
+	} {
+		if got, err := NormalizeBasePath(raw); err == nil {
+			t.Errorf("NormalizeBasePath(%q) = %q, want an error", raw, got)
+		}
+	}
+}
+
 func TestServerConfigPrefixPath(t *testing.T) {
 	tests := []struct {
 		basePath string

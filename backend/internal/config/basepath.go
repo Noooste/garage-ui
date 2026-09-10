@@ -2,8 +2,43 @@ package config
 
 import (
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 )
+
+// reservedFirstSegments are the path roots the server itself serves. A base
+// path starting with one of them would shadow it: the prefix is stripped
+// before routing, so with base_path=/api a request for /api/v1/health arrives
+// as /v1/health, and with base_path=/health the container probe on /health
+// arrives as /. Fiber routes case-insensitively by default, so the comparison
+// is folded. "login" and "assets" belong to the SPA rather than the API, and
+// break in the same way.
+var reservedFirstSegments = map[string]struct{}{
+	"api":     {},
+	"assets":  {},
+	"auth":    {},
+	"docs":    {},
+	"health":  {},
+	"login":   {},
+	"metrics": {},
+}
+
+// segmentPattern is deliberately narrower than RFC 3986 allows. The base path
+// is interpolated into HTML attributes and into URLs; unreserved characters
+// plus percent-encoding cover every realistic mount point, and everything that
+// could break out of an attribute is rejected outright. Escaping at the
+// injection site still happens - this is the outer of two layers.
+var segmentPattern = regexp.MustCompile(`^[A-Za-z0-9._~%+-]+$`)
+
+func reservedSegmentList() string {
+	names := make([]string, 0, len(reservedFirstSegments))
+	for name := range reservedFirstSegments {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
 
 // NormalizeBasePath canonicalises a configured subpath so every consumer
 // (route registration, OIDC redirect URIs, SPA fallback, asset base href) can
@@ -35,13 +70,22 @@ func NormalizeBasePath(raw string) (string, error) {
 		if segment == "." || segment == ".." {
 			return "", fmt.Errorf("server.base_path %q must not contain %q segments", raw, segment)
 		}
-		if strings.ContainsAny(segment, " \t\n\r") {
-			return "", fmt.Errorf("server.base_path %q must not contain whitespace", raw)
+		if !segmentPattern.MatchString(segment) {
+			return "", fmt.Errorf(
+				"server.base_path %q: segment %q may only contain letters, digits and %q",
+				raw, segment, "._~%+-")
 		}
 		kept = append(kept, segment)
 	}
 	if len(kept) == 0 {
 		return "", nil
+	}
+
+	if _, reserved := reservedFirstSegments[strings.ToLower(kept[0])]; reserved {
+		return "", fmt.Errorf(
+			"server.base_path %q: %q is a route the server already serves, and mounting under it would shadow that route "+
+				"(reserved first segments: %s)",
+			raw, kept[0], reservedSegmentList())
 	}
 
 	return "/" + strings.Join(kept, "/"), nil

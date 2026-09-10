@@ -166,22 +166,45 @@ func TestRoutes_BasePath_NestedPrefix(t *testing.T) {
 	}
 }
 
-// The prefix must only be stripped once. Without a re-entry guard, a base path
-// that is also a legal first segment of the stripped path would be eaten twice
-// and the request would land on the wrong route.
+// The prefix must only be stripped once. Without a re-entry guard, a path that
+// repeats the prefix would be eaten twice and land on a route the client never
+// asked for.
 func TestRoutes_BasePath_StripsThePrefixOnlyOnce(t *testing.T) {
-	f := newTestApp(t, func(c *config.Config) {
-		c.Server.BasePath = "/api"
-		c.Auth.Admin.Enabled = true
-		c.Auth.Admin.Username = "u"
-		c.Auth.Admin.Password = "p"
-	})
+	f := newBasePathApp(t, "/ui")
 
-	// "/api" + "/api/v1/health" — stripping twice would leave "/v1/health".
-	expectStatus(t, f.App, httptest.NewRequest(http.MethodGet, "/api/api/v1/health", nil), http.StatusOK)
+	// One strip leaves "/ui/health", which is not a route. Stripping twice
+	// would reach /health and answer 200 for a request nobody made.
+	if !notFound(t, f, http.MethodGet, "/ui/ui/health") {
+		t.Error("/ui/ui/health matched — the prefix was stripped more than once")
+	}
+	// The single-prefix spelling of the same route does work.
+	expectStatus(t, f.App, httptest.NewRequest(http.MethodGet, "/ui/health", nil), http.StatusOK)
+}
 
-	if !notFound(t, f, http.MethodGet, "/api/api/api/v1/health") {
-		t.Error("a doubly-prefixed path matched — the prefix was stripped more than once")
+// Review #1: a base path whose first segment is a route root would shadow that
+// route once the prefix is stripped. Config.Load rejects such a value, and the
+// route table is what makes the list of reserved segments correct - if a new
+// top-level route root appears, this test points at the omission.
+func TestRoutes_BasePath_ReservedSegmentsCoverTheRouteRoots(t *testing.T) {
+	f := newBasePathApp(t, testBasePath)
+
+	roots := map[string]struct{}{}
+	for _, route := range f.App.GetRoutes() {
+		trimmed := strings.TrimPrefix(route.Path, "/")
+		if i := strings.Index(trimmed, "/"); i > 0 {
+			trimmed = trimmed[:i]
+		}
+		if trimmed == "" || strings.HasPrefix(trimmed, ":") || strings.HasPrefix(trimmed, "*") {
+			continue
+		}
+		roots[trimmed] = struct{}{}
+	}
+
+	for root := range roots {
+		if _, err := config.NormalizeBasePath("/" + root); err == nil {
+			t.Errorf("base_path %q is accepted although %q is a registered route root: "+
+				"mounting there would shadow it", "/"+root, root)
+		}
 	}
 }
 
