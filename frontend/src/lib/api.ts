@@ -164,7 +164,10 @@ export const authApi = {
   },
 
   logoutOIDC: async () => {
-    const response = await authApiClient.post('/oidc/logout');
+    // logout_url is set when the provider supports RP-initiated logout.
+    const response = await authApiClient.post<{ success: boolean; message: string; logout_url?: string }>(
+      '/oidc/logout'
+    );
     return response;
   },
 

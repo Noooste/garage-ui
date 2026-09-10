@@ -92,6 +92,15 @@ type OIDCConfig struct {
 	CookieSecure      bool     `mapstructure:"cookie_secure"`
 	CookieHTTPOnly    bool     `mapstructure:"cookie_http_only"`
 	CookieSameSite    string   `mapstructure:"cookie_same_site"`
+	// Where the IdP sends the browser after ending the SSO session. Defaults
+	// to {root_url}/login, and must be registered with the provider.
+	PostLogoutRedirectURL string `mapstructure:"post_logout_redirect_url"`
+}
+
+// IDTokenCookieName is the cookie holding the raw ID token, which logout
+// sends to the provider as id_token_hint.
+func (o OIDCConfig) IDTokenCookieName() string {
+	return o.CookieName + "_id"
 }
 
 // EffectiveAdminRoles returns the deduplicated list of admin roles drawn from
@@ -319,6 +328,7 @@ func bindEnvVars() {
 	viper.BindEnv("auth.oidc.cookie_secure", "GARAGE_UI_AUTH_OIDC_COOKIE_SECURE")
 	viper.BindEnv("auth.oidc.cookie_http_only", "GARAGE_UI_AUTH_OIDC_COOKIE_HTTP_ONLY")
 	viper.BindEnv("auth.oidc.cookie_same_site", "GARAGE_UI_AUTH_OIDC_COOKIE_SAME_SITE")
+	viper.BindEnv("auth.oidc.post_logout_redirect_url", "GARAGE_UI_AUTH_OIDC_POST_LOGOUT_REDIRECT_URL")
 
 	// CORS config
 	viper.BindEnv("cors.enabled", "GARAGE_UI_CORS_ENABLED")

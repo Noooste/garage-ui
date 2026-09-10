@@ -151,11 +151,13 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: async () => {
         const { config } = get();
+        let logoutUrl: string | undefined;
 
         try {
           // Call logout endpoint for OIDC mode
           if (config?.oidc.enabled) {
-            await authApi.logoutOIDC();
+            const response = await authApi.logoutOIDC();
+            logoutUrl = response.data.logout_url;
           } else if (config?.admin.enabled) {
             await authApi.logoutAdmin();
           }
@@ -173,8 +175,9 @@ export const useAuthStore = create<AuthStore>()(
           error: null
         });
 
-        // Redirect to login page
-        window.location.href = '/login';
+        // The IdP ends its own session then sends the browser back to
+        // post_logout_redirect_url; without single sign-out, go straight there.
+        window.location.href = logoutUrl ?? '/login';
       },
     }),
     {

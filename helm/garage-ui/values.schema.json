@@ -396,6 +396,10 @@
                   "description": "SameSite cookie attribute for CSRF protection",
                   "enum": ["lax", "strict", "none"],
                   "default": "lax"
+                },
+                "post_logout_redirect_url": {
+                  "type": "string",
+                  "description": "Where the provider sends the browser after single sign-out (defaults to {root_url}/login)"
                 }
               }
             }
