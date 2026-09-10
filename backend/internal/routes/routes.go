@@ -7,6 +7,7 @@ import (
 	"Noooste/garage-ui/internal/handlers"
 	"Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/pkg/logger"
+	"html"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -37,40 +38,15 @@ func SetupRoutes(
 	// Apply CORS middleware globally
 	app.Use(middleware.CORSMiddleware(&cfg.CORS))
 
-	// Subpath support (issue #107). Routes stay registered at the root; a
-	// configured base path is accepted as an optional prefix on the way in.
-	//
-	// Reverse proxies split into two camps: some strip the mount point before
-	// forwarding (tailscale serve, Traefik's StripPrefix, the usual k8s
-	// rewrite-target), others pass the full path through (nginx proxy_pass
-	// without a URI part). Accepting the prefix rather than requiring it means
-	// one setting covers both, and container probes that hit the unprefixed
-	// /health keep working untouched.
+	// Subpath support (issue #107): server.base_path is what the browser is
+	// told - the asset base href injected into index.html, the SPA's router and
+	// API base, the OIDC redirect URI and the session cookie scope. Accepting
+	// the prefix on the way in is middleware.StripBasePath's job, installed in
+	// main.go ahead of the request-id and access-log middleware.
 	basePath := cfg.Server.NormalizedBasePath()
-	if basePath != "" {
-		app.Use(func(c fiber.Ctx) error {
-			// RestartRouting replays this handler, and a base path that is also
-			// a legal first segment of the stripped path (base "/a", request
-			// "/a/a/x") would otherwise be stripped twice.
-			if c.Locals(basePathStrippedKey) != nil {
-				return c.Next()
-			}
-
-			path := c.Path()
-			if path != basePath && !strings.HasPrefix(path, basePath+"/") {
-				return c.Next()
-			}
-
-			c.Locals(basePathStrippedKey, true)
-			stripped := strings.TrimPrefix(path, basePath)
-			if stripped == "" {
-				stripped = "/"
-			}
-			logger.Debug().Str("path", path).Str("stripped", stripped).Msg("Stripped base path")
-			c.Path(stripped)
-			return c.RestartRouting()
-		})
-	}
+	// Cookie paths need the trailing slash; at the root this is "/", i.e. the
+	// historical default.
+	cookiePath := basePath + "/"
 
 	// Health check endpoint (no auth required)
 	app.Get("/health", healthHandler.Check)
@@ -341,9 +317,14 @@ func SetupRoutes(
 				}
 
 				// Set JWT session token as secure cookie
+				// Scope the session to the deployment's own subtree. Without a
+				// Path the cookie defaults to "/" and the JWT would be sent to
+				// every other service sharing this hostname - which is exactly
+				// the deployment shape base_path exists for.
 				c.Cookie(&fiber.Cookie{
 					Name:     cfg.Auth.OIDC.CookieName,
 					Value:    sessionToken,
+					Path:     cookiePath,
 					MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
 					Secure:   cfg.Auth.OIDC.CookieSecure,
 					HTTPOnly: cfg.Auth.OIDC.CookieHTTPOnly,
@@ -358,9 +339,12 @@ func SetupRoutes(
 			// Logout endpoint
 			oidcRoutes.Post("/logout", func(c fiber.Ctx) error {
 				// Clear session cookie
+				// Must match the Path the cookie was set with, or the browser
+				// keeps the original one.
 				c.Cookie(&fiber.Cookie{
 					Name:   cfg.Auth.OIDC.CookieName,
 					Value:  "",
+					Path:   cookiePath,
 					MaxAge: -1,
 				})
 
@@ -391,9 +375,12 @@ func SetupRoutes(
 				return c.Next()
 			}
 
-			// Try to serve static files first
+			// Try to serve static files first. index.html is deliberately not
+			// served from here: it is the one file that has to go through the
+			// base-path injection below, and requesting it by name would
+			// otherwise hand out the build's placeholder base href.
 			filePath := filepath.Join(frontendPath, path)
-			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+			if info, err := os.Stat(filePath); path != "/index.html" && err == nil && !info.IsDir() {
 				if strings.HasPrefix(path, "/assets/") {
 					c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
 				} else {
@@ -408,19 +395,15 @@ func SetupRoutes(
 			// The frontend build is deployment-agnostic (relative asset URLs);
 			// the public prefix is injected here at request time, so one image
 			// can serve any subpath without a rebuild.
-			html, err := os.ReadFile(indexPath)
+			shell, err := os.ReadFile(indexPath)
 			if err != nil {
 				return c.SendFile(indexPath)
 			}
 			c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
-			return c.Send(InjectBasePath(html, basePath))
+			return c.Send(InjectBasePath(shell, basePath))
 		})
 	}
 }
-
-// basePathStrippedKey marks a request whose base path has already been
-// stripped, so the middleware does not run again after RestartRouting.
-const basePathStrippedKey = "garageui_base_path_stripped"
 
 var (
 	baseHrefRe = regexp.MustCompile(`(?i)<base[^>]*\shref\s*=\s*"[^"]*"[^>]*>`)
@@ -437,24 +420,27 @@ var (
 // tags are replaced; missing ones are inserted after <head>. Serving from the
 // root yields href="/" and an empty content attribute, i.e. the historical
 // behaviour.
-func InjectBasePath(html []byte, basePath string) []byte {
-	baseHref := basePath + "/"
-	baseTag := []byte(`<base href="` + baseHref + `">`)
-	metaTag := []byte(`<meta name="garage-ui-base-path" content="` + basePath + `">`)
+func InjectBasePath(document []byte, basePath string) []byte {
+	// config.NormalizeBasePath already rejects everything that could break out
+	// of an attribute; escaping here is the second layer, and the one that
+	// holds even if this is ever called with an unvalidated value.
+	escaped := html.EscapeString(basePath)
+	baseTag := []byte(`<base href="` + escaped + `/">`)
+	metaTag := []byte(`<meta name="garage-ui-base-path" content="` + escaped + `">`)
 
-	if baseHrefRe.Match(html) {
-		html = baseHrefRe.ReplaceAll(html, baseTag)
+	if baseHrefRe.Match(document) {
+		document = baseHrefRe.ReplaceAll(document, baseTag)
 	} else {
-		html = insertIntoHead(html, baseTag)
+		document = insertIntoHead(document, baseTag)
 	}
 
-	if baseMetaRe.Match(html) {
-		html = baseMetaRe.ReplaceAll(html, metaTag)
+	if baseMetaRe.Match(document) {
+		document = baseMetaRe.ReplaceAll(document, metaTag)
 	} else {
-		html = insertIntoHead(html, metaTag)
+		document = insertIntoHead(document, metaTag)
 	}
 
-	return html
+	return document
 }
 
 // Insertion anchors in preference order. Anything before the doctype would
@@ -466,17 +452,17 @@ var insertAnchors = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)^\s*<!doctype[^>]*>`),
 }
 
-func insertIntoHead(html, tag []byte) []byte {
+func insertIntoHead(document, tag []byte) []byte {
 	for _, re := range insertAnchors {
-		loc := re.FindIndex(html)
+		loc := re.FindIndex(document)
 		if loc == nil {
 			continue
 		}
-		out := make([]byte, 0, len(html)+len(tag))
-		out = append(out, html[:loc[1]]...)
+		out := make([]byte, 0, len(document)+len(tag))
+		out = append(out, document[:loc[1]]...)
 		out = append(out, tag...)
-		out = append(out, html[loc[1]:]...)
+		out = append(out, document[loc[1]:]...)
 		return out
 	}
-	return append(tag, html...)
+	return append(tag, document...)
 }

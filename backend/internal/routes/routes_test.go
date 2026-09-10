@@ -16,6 +16,7 @@ import (
 	"Noooste/garage-ui/internal/authz"
 	"Noooste/garage-ui/internal/config"
 	"Noooste/garage-ui/internal/handlers"
+	"Noooste/garage-ui/internal/middleware"
 	"Noooste/garage-ui/internal/services"
 	"Noooste/garage-ui/internal/services/mocks"
 
@@ -66,6 +67,9 @@ func newTestApp(t *testing.T, cfgMutator func(*config.Config)) *routeFixture {
 	az := authz.NewMiddleware(policy, authz.NewTeamResolver(policy, nil), authz.NewAuthorizer())
 
 	app := fiber.New()
+	// Mirrors main.go: the base-path stripper is global middleware installed
+	// ahead of the route table, not part of SetupRoutes.
+	app.Use(middleware.StripBasePath(cfg.Server.NormalizedBasePath()))
 	SetupRoutes(
 		app,
 		cfg,

@@ -538,3 +538,129 @@ func TestInjectBasePath_NoHeadElement(t *testing.T) {
 		t.Errorf("original markup lost: %s", got)
 	}
 }
+
+// Review #2: the base path lands inside HTML attributes. Normalization already
+// rejects the characters that would break out, so this guards the injection
+// site itself - the second of the two layers.
+func TestInjectBasePath_EscapesHTML(t *testing.T) {
+	payload := `/a"><script>alert(1)</script>`
+
+	got := string(InjectBasePath([]byte(testIndexHTML), payload))
+
+	if strings.Contains(got, "<script>alert(1)</script>") {
+		t.Errorf("payload was injected unescaped:\n%s", got)
+	}
+	if !strings.Contains(got, "&lt;script&gt;") {
+		t.Errorf("payload was not HTML-escaped:\n%s", got)
+	}
+	// Exactly one base tag, i.e. the payload did not close the attribute and
+	// open markup of its own.
+	if n := strings.Count(got, "<base "); n != 1 {
+		t.Errorf("found %d <base> tags, want 1:\n%s", n, got)
+	}
+}
+
+// Review #3: index.html requested by name hit the static-file branch and was
+// served straight from disk, i.e. with the placeholder base href of the build.
+func TestRoutes_BasePath_IndexHTMLByNameIsInjected(t *testing.T) {
+	writeFrontend(t, testIndexHTML)
+	f := newBasePathApp(t, testBasePath)
+
+	for _, path := range []string{
+		testBasePath + "/index.html",
+		"/index.html",
+	} {
+		status, body := getBody(t, f, path)
+		if status != http.StatusOK {
+			t.Fatalf("GET %s = %d, want 200", path, status)
+		}
+		if !strings.Contains(body, `<base href="/garage-ui/">`) {
+			t.Errorf("GET %s served the raw build instead of the injected shell:\n%s", path, body)
+		}
+	}
+}
+
+// Review #6: without an explicit Path the session cookie defaults to "/" and is
+// sent to every other service sharing the hostname - which is exactly the
+// deployment shape a base path exists for.
+func TestRoutes_BasePath_SessionCookieIsScopedToThePrefix(t *testing.T) {
+	f, _ := newOIDCFixtureWithBasePath(t, testBasePath)
+
+	state := oidcState(t, f)
+	resp, err := f.App.Test(httptest.NewRequest(http.MethodGet, "/auth/oidc/callback?state="+state+"&code=c", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	var session *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" {
+			session = c
+		}
+	}
+	if session == nil {
+		t.Fatal("no session cookie set")
+	}
+	if session.Path != testBasePath+"/" {
+		t.Errorf("session cookie Path = %q, want %q", session.Path, testBasePath+"/")
+	}
+
+	// The logout handler has to clear it under the same path, or the browser
+	// keeps the original cookie.
+	logoutResp, err := f.App.Test(httptest.NewRequest(http.MethodPost, "/auth/oidc/logout", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	_ = logoutResp.Body.Close()
+	for _, c := range logoutResp.Cookies() {
+		if c.Name == "session" && c.Path != testBasePath+"/" {
+			t.Errorf("logout cookie Path = %q, want %q", c.Path, testBasePath+"/")
+		}
+	}
+}
+
+// At the root the cookie keeps the historical scope.
+func TestRoutes_NoBasePath_SessionCookieStaysAtRoot(t *testing.T) {
+	f, _ := newOIDCFixtureWithBasePath(t, "")
+
+	state := oidcState(t, f)
+	resp, err := f.App.Test(httptest.NewRequest(http.MethodGet, "/auth/oidc/callback?state="+state+"&code=c", nil))
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" && c.Path != "/" {
+			t.Errorf("session cookie Path = %q, want %q", c.Path, "/")
+		}
+	}
+}
+
+// newOIDCFixtureWithBasePath wires the OIDC routes with a base path, with the
+// role gate off so the callback reaches the happy path.
+func newOIDCFixtureWithBasePath(t *testing.T, basePath string) (*routeFixture, *testIssuer) {
+	t.Helper()
+	iss := newTestIssuer(t)
+	f := newTestApp(t, func(c *config.Config) {
+		c.Server.RootURL = "https://host.ts.net"
+		c.Server.BasePath = basePath
+		c.Auth.OIDC = config.OIDCConfig{
+			Enabled:           true,
+			ClientID:          iss.ClientID,
+			ClientSecret:      "secret",
+			IssuerURL:         iss.Server.URL,
+			Scopes:            []string{"openid", "profile", "email"},
+			UsernameAttribute: "preferred_username",
+			EmailAttribute:    "email",
+			NameAttribute:     "name",
+			RoleAttributePath: "resource_access.test-client.roles",
+			CookieName:        "session",
+			CookieHTTPOnly:    true,
+			CookieSameSite:    "Lax",
+			SessionMaxAge:     3600,
+		}
+	})
+	return f, iss
+}
