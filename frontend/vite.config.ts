@@ -1,13 +1,13 @@
 import {defineConfig, type Plugin} from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import {normalizeVitePrefix} from './vite-base-path'
 
 // When a fixed prefix is baked in (VITE_BASE_PATH, e.g. for serving dist/ from
 // nginx without the Go backend), index.html has to advertise it too — the app
 // reads the base path from these tags, not from import.meta.env. The backend
 // rewrites the very same tags at request time for the default relative build.
-function basePathTags(basePath: string): Plugin {
-  const normalized = basePath.replace(/\/+$/, '')
+function basePathTags(normalized: string): Plugin {
   return {
     name: 'garage-ui-base-path-tags',
     transformIndexHtml(html) {
@@ -21,7 +21,9 @@ function basePathTags(basePath: string): Plugin {
   }
 }
 
-const envBasePath = process.env.VITE_BASE_PATH || ''
+// Normalized once: a value without a leading slash would otherwise produce a
+// relative <base href> that resolves against the current route.
+const envBasePath = normalizeVitePrefix(process.env.VITE_BASE_PATH)
 
 // https://vite.dev/config/
 export default defineConfig({

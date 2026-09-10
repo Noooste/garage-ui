@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import html from '../../index.html?raw';
 import viteConfig from '../../vite.config.ts?raw';
+import { normalizeVitePrefix } from '../../vite-base-path';
 
 /**
  * Issue #107: the deployment's subpath is injected into index.html by the
@@ -51,5 +52,38 @@ describe('vite config', () => {
     // rewritten tags the app would resolve its base path as the root.
     expect(viteConfig).toMatch(/garage-ui-base-path-tags/);
     expect(viteConfig).toMatch(/envBasePath \? \[react\(\), basePathTags\(envBasePath\)\]/);
+  });
+
+  it('feeds the normalized prefix to both the base and the tags', () => {
+    expect(viteConfig).toMatch(/normalizeVitePrefix\(process\.env\.VITE_BASE_PATH\)/);
+    expect(viteConfig).toMatch(/base:\s*envBasePath\s*\|\|\s*'\.\/'/);
+  });
+});
+
+/**
+ * Review #5: VITE_BASE_PATH was only stripped of trailing slashes. A value
+ * without a leading slash produced <base href="garage-ui/">, which resolves
+ * against the current route — so ./garage.png 404s at /buckets/foo.
+ */
+describe('normalizeVitePrefix', () => {
+  it.each([
+    ['garage-ui', '/garage-ui'],
+    ['garage-ui/', '/garage-ui'],
+    ['/garage-ui', '/garage-ui'],
+    ['/garage-ui/', '/garage-ui'],
+    ['//garage-ui//', '/garage-ui'],
+    ['admin/garage-ui', '/admin/garage-ui'],
+    ['  garage-ui  ', '/garage-ui'],
+    ['/', ''],
+    ['', ''],
+    [undefined, ''],
+  ])('normalizes %o to %o', (raw, expected) => {
+    expect(normalizeVitePrefix(raw)).toBe(expected);
+  });
+
+  it('produces a base href that survives a deep route', () => {
+    const href = `${normalizeVitePrefix('garage-ui')}/`;
+    const resolved = new URL('./garage.png', new URL(href, 'https://host/buckets/foo')).href;
+    expect(resolved).toBe('https://host/garage-ui/garage.png');
   });
 });
