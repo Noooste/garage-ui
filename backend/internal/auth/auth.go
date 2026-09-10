@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"Noooste/garage-ui/internal/config"
@@ -26,6 +27,8 @@ type Service struct {
 	oauth2Config *oauth2.Config
 	oidcClient   *http.Client
 	jwtService   *JWTService
+	// Provider's RP-initiated logout endpoint; empty when it advertises none.
+	endSessionEndpoint string
 }
 
 // UserInfo represents authenticated user information
@@ -80,6 +83,15 @@ func (a *Service) initOIDC() error {
 	}
 
 	a.oidcProvider = provider
+
+	// Not exposed by go-oidc's Provider, so read it off the discovery document.
+	var discovery struct {
+		EndSessionEndpoint string `json:"end_session_endpoint"`
+	}
+	if err := provider.Claims(&discovery); err != nil {
+		logger.Warn().Err(err).Msg("Failed to read OIDC discovery claims, single sign-out disabled")
+	}
+	a.endSessionEndpoint = discovery.EndSessionEndpoint
 
 	// Create ID token verifier
 	verifierConfig := &oidc.Config{
@@ -137,6 +149,46 @@ func (a *Service) GetAuthorizationURL(state string) (string, error) {
 	}
 
 	return a.oauth2Config.AuthCodeURL(state), nil
+}
+
+// SupportsRPInitiatedLogout reports whether the provider advertises an
+// end_session_endpoint, meaning logout can also end the SSO session.
+func (a *Service) SupportsRPInitiatedLogout() bool {
+	return a.endSessionEndpoint != ""
+}
+
+// LogoutURL returns the provider's RP-initiated logout URL, or "" when it
+// advertises no end_session_endpoint. Without idTokenHint, providers such as
+// Keycloak ask the user to confirm the logout.
+func (a *Service) LogoutURL(idTokenHint string) string {
+	if a.endSessionEndpoint == "" {
+		return ""
+	}
+
+	params := url.Values{}
+	if idTokenHint != "" {
+		params.Set("id_token_hint", idTokenHint)
+	}
+	// Providers want id_token_hint or client_id before honouring
+	// post_logout_redirect_uri, so always send client_id as a fallback.
+	params.Set("client_id", a.authConfig.OIDC.ClientID)
+	params.Set("post_logout_redirect_uri", a.postLogoutRedirectURL())
+
+	separator := "?"
+	if strings.Contains(a.endSessionEndpoint, "?") {
+		separator = "&"
+	}
+
+	return a.endSessionEndpoint + separator + params.Encode()
+}
+
+// postLogoutRedirectURL defaults to this deployment's login page.
+func (a *Service) postLogoutRedirectURL() string {
+	if configured := a.authConfig.OIDC.PostLogoutRedirectURL; configured != "" {
+		return configured
+	}
+
+	return strings.TrimRight(a.serverConfig.RootURL, "/") + "/login"
 }
 
 // ExchangeCode exchanges an authorization code for tokens

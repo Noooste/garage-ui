@@ -146,6 +146,9 @@ config:
       cookie_secure: true
       cookie_http_only: true
       cookie_same_site: "lax"
+      # Single sign-out target, defaults to {root_url}/login. Register it with
+      # the provider as a valid post-logout redirect URI.
+      post_logout_redirect_url: ""
 
   # CORS configuration
   cors:

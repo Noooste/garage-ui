@@ -331,27 +331,68 @@ func SetupRoutes(
 					SameSite: cfg.Auth.OIDC.CookieSameSite,
 				})
 
+				// Kept for logout's id_token_hint. Only worth carrying when the
+				// provider can end the SSO session, and never readable from JS.
+				if authService.SupportsRPInitiatedLogout() {
+					c.Cookie(&fiber.Cookie{
+						Name:     cfg.Auth.OIDC.IDTokenCookieName(),
+						Value:    rawIDToken,
+						MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
+						Secure:   cfg.Auth.OIDC.CookieSecure,
+						HTTPOnly: true,
+						SameSite: cfg.Auth.OIDC.CookieSameSite,
+					})
+				}
+
 				// Redirect to frontend with success indicator
 				// Browser-facing, so it carries the public prefix.
 				return c.Redirect().To(config.JoinBasePath(basePath, "/login?login=success"))
 			})
 
-			// Logout endpoint
+			// Logout endpoint. Clearing the local session leaves the IdP's SSO
+			// session alive, so the next login skips credentials entirely:
+			// hand the frontend the provider's logout URL to finish the job.
 			oidcRoutes.Post("/logout", func(c fiber.Ctx) error {
-				// Clear session cookie
-				// Must match the Path the cookie was set with, or the browser
-				// keeps the original one.
+				// The session decides, not the enabled auth methods: with admin
+				// and OIDC both on, the frontend calls this for every user and
+				// an admin-password session must not reach the IdP.
+				sessionToken := c.Cookies(cfg.Auth.OIDC.CookieName)
+				if sessionToken == "" {
+					if header := c.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+						sessionToken = strings.TrimPrefix(header, "Bearer ")
+					}
+				}
+
+				logoutURL := ""
+				if userInfo, err := authService.ValidateSessionToken(sessionToken); err == nil {
+					// Sessions predating auth_method came from OIDC deployments.
+					if userInfo.AuthMethod == "oidc" || userInfo.AuthMethod == "" {
+						logoutURL = authService.LogoutURL(c.Cookies(cfg.Auth.OIDC.IDTokenCookieName()))
+					}
+				}
+
+				// Clear session and ID token cookies
 				c.Cookie(&fiber.Cookie{
 					Name:   cfg.Auth.OIDC.CookieName,
 					Value:  "",
 					Path:   cookiePath,
 					MaxAge: -1,
 				})
+				c.Cookie(&fiber.Cookie{
+					Name:   cfg.Auth.OIDC.IDTokenCookieName(),
+					Value:  "",
+					MaxAge: -1,
+				})
 
-				return c.JSON(fiber.Map{
+				response := fiber.Map{
 					"success": true,
 					"message": "Logged out successfully",
-				})
+				}
+				if logoutURL != "" {
+					response["logout_url"] = logoutURL
+				}
+
+				return c.JSON(response)
 			})
 		}
 	}

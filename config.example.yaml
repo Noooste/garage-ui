@@ -116,6 +116,12 @@ auth:
     cookie_http_only: true
     cookie_same_site: "lax" # lax, strict, none
 
+    # Single sign-out: logging out also ends the session at the provider,
+    # which then sends the browser here. Defaults to {root_url}/login.
+    # Register this URL with the provider as a valid post-logout redirect URI.
+    # Providers that advertise no end_session_endpoint keep the local-only logout.
+    # post_logout_redirect_url: "https://garage-ui.example.com/login"
+
 # Optional: team-based access control (see docs/access-control.md).
 # Absent  -> every authenticated user has full access.
 # Present -> default-deny: OIDC users get only what their teams grant; users
@@ -162,4 +168,4 @@ cors:
 # The application uses zerolog for structured logging
 logging:
   level: "info" # Options: debug, info, warn, error
-  format: "text" or "json"
+  format: "text" # Options: text or json

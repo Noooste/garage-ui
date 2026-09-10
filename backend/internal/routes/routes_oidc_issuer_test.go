@@ -68,6 +68,7 @@ func newTestIssuer(t *testing.T) *testIssuer {
 			"token_endpoint":                        srv.URL + "/token",
 			"userinfo_endpoint":                     srv.URL + "/userinfo",
 			"jwks_uri":                              srv.URL + "/jwks",
+			"end_session_endpoint":                  srv.URL + "/logout",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 			"response_types_supported":              []string{"code"},
 			"subject_types_supported":               []string{"public"},

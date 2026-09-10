@@ -152,11 +152,13 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: async () => {
         const { config } = get();
+        let logoutUrl: string | undefined;
 
         try {
           // Call logout endpoint for OIDC mode
           if (config?.oidc.enabled) {
-            await authApi.logoutOIDC();
+            const response = await authApi.logoutOIDC();
+            logoutUrl = response.data.logout_url;
           } else if (config?.admin.enabled) {
             await authApi.logoutAdmin();
           }
@@ -175,7 +177,7 @@ export const useAuthStore = create<AuthStore>()(
         });
 
         // Redirect to login page (prefixed when deployed on a subpath)
-        window.location.href = withBasePath('/login');
+        window.location.href = withBasePath(logoutUrl ?? '/login');
       },
     }),
     {
