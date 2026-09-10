@@ -11,7 +11,7 @@ COPY frontend/ .
 
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.26.0-alpine3.23 AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine3.23 AS backend-builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -38,11 +38,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -ldflags "-X main.version=${VERSION}" -o garage-ui .
 
-FROM alpine:3.23.3
+FROM alpine:3.23.5
 
 WORKDIR /app
 
-RUN apk --no-cache add ca-certificates wget
+RUN apk update && apk upgrade --no-cache && \
+    apk --no-cache add ca-certificates wget
 
 RUN addgroup -g 1000 garageui && \
     adduser -D -u 1000 -G garageui garageui
