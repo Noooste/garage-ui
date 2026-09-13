@@ -138,9 +138,7 @@ export function BucketWebsite() {
               </div>
             </div>
           )}
-        </div>
-
-        <footer className="flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-sunken)] px-5 py-3">
+          <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
           <Button variant="secondary" onClick={handleReset} disabled={saving}>Reset</Button>
           <Button
             onClick={handleSave}
@@ -149,7 +147,8 @@ export function BucketWebsite() {
           >
             {saving ? 'Saving…' : disabling ? 'Disable website' : 'Save changes'}
           </Button>
-        </footer>
+          </div>
+        </div>
       </section>
     </div>
   );

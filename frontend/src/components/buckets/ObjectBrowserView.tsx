@@ -269,7 +269,7 @@ export function ObjectBrowserView({
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           <div className="flex flex-1 items-center gap-2 max-w-full sm:max-w-md">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -297,14 +297,15 @@ export function ObjectBrowserView({
             </Button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {onDeleteMultipleObjects && selectedCount > 0 && (
+            {onDeleteMultipleObjects && (
               <Button
                 onClick={handleRequestBulkDelete}
-                title={`Delete ${selectedCount} selected item(s)`}
-                className="bg-transparent border border-red-500 text-red-500 hover:bg-red-500/5"
+                disabled={selectedCount === 0}
+                title={selectedCount === 0 ? 'Select items to delete' : `Delete ${selectedCount} selected item(s)`}
+                className="bg-transparent border border-red-500 text-red-500 hover:bg-red-500/5 flex-1 sm:flex-initial"
               >
                 <Trash className="h-4 w-4" />
-                Delete {selectedCount} item{selectedCount !== 1 ? 's' : ''}
+                <span className="hidden sm:inline">{selectedCount === 0 ? 'Delete' : `Delete ${selectedCount} item${selectedCount !== 1 ? 's' : ''}`}</span>
               </Button>
             )}
             {onUploadFiles && (
