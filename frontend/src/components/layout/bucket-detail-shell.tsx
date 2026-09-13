@@ -52,7 +52,7 @@ export function BucketDetailShell() {
     <div className="flex flex-col">
       {/* Hero */}
       <section className="px-7 pt-6 pb-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <IconTile icon={<Database />} tone="primary" size="lg" />
             <div className="min-w-0">

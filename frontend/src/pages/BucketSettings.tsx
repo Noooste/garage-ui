@@ -200,7 +200,7 @@ export function BucketSettings() {
                 control={control}
                 name="maxSizeEnabled"
                 render={({ field }) => (
-                  <label className="flex items-center gap-2 text-[14px]">
+                  <label className="flex w-full items-center gap-2 text-[14px]">
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                     <span>Limit total size</span>
                   </label>
@@ -210,7 +210,7 @@ export function BucketSettings() {
                 type="number"
                 min={1}
                 step={1}
-                className="w-32"
+                className="min-w-0 flex-1"
                 disabled={!watched.maxSizeEnabled}
                 {...register('maxSizeValue')}
               />
@@ -253,7 +253,7 @@ export function BucketSettings() {
                 control={control}
                 name="maxObjectsEnabled"
                 render={({ field }) => (
-                  <label className="flex items-center gap-2 text-[14px]">
+                  <label className="flex w-full items-center gap-2 text-[14px]">
                     <Switch checked={field.value} onCheckedChange={field.onChange} />
                     <span>Limit object count</span>
                   </label>
@@ -263,7 +263,7 @@ export function BucketSettings() {
                 type="number"
                 min={1}
                 step={1}
-                className="w-40"
+                className="min-w-0 flex-1"
                 disabled={!watched.maxObjectsEnabled}
                 {...register('maxObjectsValue')}
               />
@@ -281,17 +281,17 @@ export function BucketSettings() {
             )}
           </div>
 
-          <div className="flex items-center gap-3 border-t border-[var(--border)] pt-4">
-            <Button type="submit" disabled={!isDirty || isSubmitting}>
-              Save changes
-            </Button>
+          <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               onClick={() => reset(defaults)}
               disabled={!isDirty || isSubmitting}
             >
               Reset
+            </Button>
+            <Button type="submit" disabled={!isDirty || isSubmitting}>
+              Save changes
             </Button>
           </div>
         </form>

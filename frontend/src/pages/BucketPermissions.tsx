@@ -122,7 +122,7 @@ export function BucketPermissions() {
             </div>
           </div>
 
-          <div className="pt-1">
+          <div className="flex justify-end pt-1">
             <Button onClick={onGrant} disabled={!canSubmit}>
               {grant.isPending ? 'Granting…' : 'Grant access'}
             </Button>

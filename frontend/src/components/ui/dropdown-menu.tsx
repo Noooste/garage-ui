@@ -76,9 +76,9 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
 
         let left = rect.left;
         if (align === 'end') {
-          left = rect.right - 224; // 224px = w-56
+          left = rect.right - 176; // 176px = w-44
         } else if (align === 'center') {
-          left = rect.left + rect.width / 2 - 112; // 112px = half of w-56
+          left = rect.left + rect.width / 2 - 88; // 88px = half of w-44
         }
 
         setPosition({ left, ...placeUnder(rect, window.innerHeight, 8) });
@@ -124,7 +124,7 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
           ...position,
         }}
         className={cn(
-          'z-50 w-56 origin-top-right overflow-auto rounded-md text-popover-foreground shadow-lg ring-1 ring-border border border-border focus:outline-none',
+          'z-50 w-44 origin-top-right overflow-auto rounded-md text-popover-foreground shadow-lg ring-1 ring-border border border-border focus:outline-none',
           className
         )}
         {...props}
@@ -161,7 +161,7 @@ DropdownMenuItem.displayName = 'DropdownMenuItem';
 
 const DropdownMenuSeparator = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('-mx-1 my-1 h-px bg-muted', className)} {...props} />
+    <div ref={ref} className={cn('my-1 h-px bg-muted', className)} {...props} />
   )
 );
 DropdownMenuSeparator.displayName = 'DropdownMenuSeparator';
