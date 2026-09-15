@@ -93,7 +93,7 @@ export function BucketListView({
                   <TableCell className="font-medium max-w-[200px]">
                     <span className="truncate">{bucket.name}</span>
                     {bucket.websiteAccess && (
-                      <Badge variant="neutral" className="text-xs ml-2">
+                      <Badge variant="neutral" className="ml-2">
                         <Globe className="h-3 w-3 mr-1" />
                         Website
                       </Badge>

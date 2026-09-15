@@ -44,7 +44,7 @@ export function Layout() {
       <Button
         variant="ghost"
         size="icon"
-        className="fixed left-3 top-3 z-50 md:hidden"
+        className="fixed left-3 top-3 z-50 md:hidden h-8 w-8"
         onClick={() => setSidebarOpen(!sidebarOpen)}
         aria-label="Toggle navigation"
       >
