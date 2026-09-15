@@ -13,6 +13,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        'src/lib/base-path.ts',
         'src/lib/preview-utils.ts',
         'src/lib/highlight.ts',
         'src/hooks/useObjectPreview.ts',
