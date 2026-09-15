@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.0](https://github.com/Noooste/garage-ui/compare/v0.12.1...v0.13.0) (2026-09-15)
+
+
+### Features
+
+* **backend,helm:** implement RP-initiated logout support with configurable redirect URL for OIDC ([494fac2](https://github.com/Noooste/garage-ui/commit/494fac287fdc3b41bd17c3ae7998ce3899865bc2))
+
+
+### Bug Fixes
+
+* **frontend:** improve table responsiveness on mobile and tablet ([#123](https://github.com/Noooste/garage-ui/issues/123)) ([8771839](https://github.com/Noooste/garage-ui/commit/87718398780fcd938ad7b00842e3656cd571fd70))
+* **frontend:** responsive polish for mobile and tablet ([#126](https://github.com/Noooste/garage-ui/issues/126)) ([915ab07](https://github.com/Noooste/garage-ui/commit/915ab07cc8193f1b6a56de1e409bdbea0322ec0d))
+* updated test.yml to new go-version 1.25 -&gt; 1.27 ([a7f04dc](https://github.com/Noooste/garage-ui/commit/a7f04dcecb47ce1075387499dd8869d73eaabfb3))
+
 ## [0.12.1](https://github.com/Noooste/garage-ui/compare/v0.12.0...v0.12.1) (2026-08-17)
 
 
