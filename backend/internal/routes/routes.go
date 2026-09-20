@@ -397,7 +397,9 @@ func SetupRoutes(
 		}
 	}
 
-	cfg.Server.FrontendPath = "./frontend/dist"
+	if cfg.Server.FrontendPath == "" {
+		cfg.Server.FrontendPath = "./frontend/dist"
+	}
 
 	// Check if frontend path exists
 	if _, err := os.Stat(cfg.Server.FrontendPath); err == nil {

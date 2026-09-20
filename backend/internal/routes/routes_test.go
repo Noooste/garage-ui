@@ -626,3 +626,38 @@ func TestRoutes_SPAFallback_WithFrontend_ServesIndexForUnknownPath(t *testing.T)
 	req2 := httptest.NewRequest("GET", "/api/v1/definitely-not-a-route", nil)
 	expectStatus(t, f.App, req2, 404)
 }
+
+func TestRoutes_SPAFallback_HonorsConfiguredFrontendPath(t *testing.T) {
+	// Deployments that install the binary and the assets in separate prefixes
+	// (FreeBSD rc.d: /usr/local/bin + /usr/local/www) set server.frontend_path
+	// and run with a CWD that has no ./frontend/dist. The fallback must mount
+	// from the configured path, not from the CWD.
+	//
+	// Self-managed temp dir rather than t.TempDir: Fiber's c.SendFile keeps a
+	// handle on the served file, which makes t.TempDir cleanup fail on Windows.
+	dist, err := os.MkdirTemp("", "garage-ui-dist")
+	if err != nil {
+		t.Fatalf("mkdtemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dist) })
+
+	index := filepath.Join(dist, "index.html")
+	if err := os.WriteFile(index, []byte("<!doctype html><title>spa</title>"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// CWD deliberately has no ./frontend/dist.
+	t.Chdir(t.TempDir())
+
+	f := newTestApp(t, func(cfg *config.Config) {
+		cfg.Server.FrontendPath = dist
+	})
+
+	req := httptest.NewRequest("GET", "/buckets", nil)
+	resp := expectStatus(t, f.App, req, 200)
+	body := make([]byte, 64)
+	n, _ := resp.Body.Read(body)
+	if !strings.Contains(string(body[:n]), "spa") {
+		t.Errorf("body = %q, want index.html content", string(body[:n]))
+	}
+}

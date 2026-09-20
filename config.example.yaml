@@ -21,7 +21,16 @@ server:
   # SPA's router/API base, and the OIDC redirect URI — all injected at request
   # time, so no rebuild is needed.
   # Env var: GARAGE_UI_SERVER_BASE_PATH
+
   base_path: "" # e.g. "/garage-ui"
+  # Directory holding the built frontend (the contents of frontend/dist).
+  # Defaults to "./frontend/dist", resolved against the working directory, which
+  # suits the repo layout and the Docker image. Set an absolute path when the
+  # binary and the assets live in different prefixes, e.g. a FreeBSD rc.d service
+  # with the binary in /usr/local/bin and the assets in /usr/local/www/garage-ui.
+  # If the directory does not exist the UI is not served and every non-API route
+  # returns 404. Env: GARAGE_UI_SERVER_FRONTEND_PATH
+  frontend_path: ""
 
   # Request size limits (in bytes)
   max_body_size: 314572800 # 300MB - Maximum request body size (increase for large file uploads)
