@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AuthConfig, AuthUser, AuthState } from '@/types/auth';
 import { authApi } from '@/lib/api';
+import { withBasePath } from '@/lib/base-path';
 
 interface AuthStore extends AuthState {
   config: AuthConfig | null;
@@ -145,8 +146,8 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       loginOIDC: () => {
-        // Redirect to OIDC login endpoint
-        window.location.href = '/auth/oidc/login';
+        // Redirect to OIDC login endpoint (prefixed when deployed on a subpath)
+        window.location.href = withBasePath('/auth/oidc/login');
       },
 
       logout: async () => {
@@ -175,9 +176,8 @@ export const useAuthStore = create<AuthStore>()(
           error: null
         });
 
-        // The IdP ends its own session then sends the browser back to
-        // post_logout_redirect_url; without single sign-out, go straight there.
-        window.location.href = logoutUrl ?? '/login';
+        // Redirect to login page (prefixed when deployed on a subpath)
+        window.location.href = withBasePath(logoutUrl ?? '/login');
       },
     }),
     {

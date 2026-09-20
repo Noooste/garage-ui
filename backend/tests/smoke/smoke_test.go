@@ -22,6 +22,9 @@ import (
 const (
 	composeProject = "garage-ui-smoke"
 	backendBaseURL = "http://127.0.0.1:18080"
+	// Second instance of the same image, served from a subpath (issue #107).
+	subpathBaseURL = "http://127.0.0.1:18081"
+	subpathPrefix  = "/garage-ui"
 	adminToken     = "smoke-admin-token-do-not-use-in-prod"
 	adminUsername  = "smokeadmin"
 	adminPassword  = "smokepass"
@@ -137,10 +140,16 @@ func TestMain(m *testing.M) {
 	}
 
 	fmt.Fprintln(os.Stderr, "[smoke] starting backend...")
-	runComposeNoT("up", "-d", "backend")
+	runComposeNoT("up", "-d", "backend", "backend-subpath")
 
 	if err := waitForHTTP(ctx, backendBaseURL+"/health", readyTimeout); err != nil {
 		fmt.Fprintf(os.Stderr, "[smoke] backend not ready: %v\n", err)
+		cleanup()
+		os.Exit(1)
+	}
+
+	if err := waitForHTTP(ctx, subpathBaseURL+subpathPrefix+"/api/v1/health", readyTimeout); err != nil {
+		fmt.Fprintf(os.Stderr, "[smoke] subpath backend not ready: %v\n", err)
 		cleanup()
 		os.Exit(1)
 	}

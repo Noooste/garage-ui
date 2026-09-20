@@ -122,6 +122,12 @@
               "pattern": "^https?://",
               "default": "https://garage-ui.example.com"
             },
+            "base_path": {
+              "type": "string",
+              "description": "Subpath to serve the app from behind a path-routing reverse proxy (e.g. /garage-ui). Empty serves from the root.",
+              "pattern": "^(/[^/?#\\s]+)*$",
+              "default": ""
+            },
             "max_body_size": {
               "type": "integer",
               "description": "Maximum request body size in bytes (for file uploads)",
