@@ -4,6 +4,19 @@ import type { AuthConfig, AuthUser, AuthState } from '@/types/auth';
 import { authApi } from '@/lib/api';
 import { withBasePath } from '@/lib/base-path';
 
+// A reverse proxy or IdP whose own session has expired answers the XHR with its
+// login page under a 200 instead of letting it through. Storing that body as the
+// config makes every `config.admin.enabled` read throw, which takes the whole
+// React tree down with it.
+const isAuthConfig = (value: unknown): value is AuthConfig =>
+  typeof value === 'object' &&
+  value !== null &&
+  (['admin', 'oidc', 'token'] as const).every(
+    (method) =>
+      typeof (value as Record<string, { enabled?: unknown } | undefined>)[method]?.enabled ===
+      'boolean'
+  );
+
 interface AuthStore extends AuthState {
   config: AuthConfig | null;
 
@@ -43,7 +56,10 @@ export const useAuthStore = create<AuthStore>()(
 
           // Fetch auth configuration
           const configResponse = await authApi.getConfig();
-          const config = configResponse.data as AuthConfig;
+          if (!isAuthConfig(configResponse.data)) {
+            throw new Error('Unexpected /auth/config response');
+          }
+          const config = configResponse.data;
           set({ config });
 
           // If no auth is enabled, mark as authenticated immediately
