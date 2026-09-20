@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.13.0](https://github.com/Noooste/garage-ui/compare/v0.12.1...v0.13.0) (2026-09-20)
+
+
+### Features
+
+* **auth:** enhance logout handling with proper URL redirection and cookie path scoping ([a714fb0](https://github.com/Noooste/garage-ui/commit/a714fb0a13dc5a96e5c6bba68f8c3581dc91089a))
+* **backend,helm:** implement RP-initiated logout support with configurable redirect URL for OIDC ([494fac2](https://github.com/Noooste/garage-ui/commit/494fac287fdc3b41bd17c3ae7998ce3899865bc2))
+* **backend:** configurable base path for subpath deployments ([#114](https://github.com/Noooste/garage-ui/issues/114)) ([d525eac](https://github.com/Noooste/garage-ui/commit/d525eaccf4a954ed898d43f4bb49269c1f9f4b8e))
+* **config:** add configurable frontend path with fallback to default ([577c85c](https://github.com/Noooste/garage-ui/commit/577c85cf276abaceb8d6294d1951d18063ea507a))
+
+
+### Bug Fixes
+
+* **frontend:** improve table responsiveness on mobile and tablet ([#123](https://github.com/Noooste/garage-ui/issues/123)) ([8771839](https://github.com/Noooste/garage-ui/commit/87718398780fcd938ad7b00842e3656cd571fd70))
+* **frontend:** prevent blank screen when /auth/config returns a non-JSON body ([#129](https://github.com/Noooste/garage-ui/issues/129)) ([8325370](https://github.com/Noooste/garage-ui/commit/83253701ccba149ba655d36d8311e47a72d9f28d))
+* **frontend:** responsive polish for mobile and tablet ([#126](https://github.com/Noooste/garage-ui/issues/126)) ([915ab07](https://github.com/Noooste/garage-ui/commit/915ab07cc8193f1b6a56de1e409bdbea0322ec0d))
+* updated test.yml to new go-version 1.25 -&gt; 1.27 ([a7f04dc](https://github.com/Noooste/garage-ui/commit/a7f04dcecb47ce1075387499dd8869d73eaabfb3))
+
 ## [0.12.1](https://github.com/Noooste/garage-ui/compare/v0.12.0...v0.12.1) (2026-08-17)
 
 
