@@ -124,8 +124,11 @@
             },
             "base_path": {
               "type": "string",
-              "description": "Subpath to serve the app from behind a path-routing reverse proxy (e.g. /garage-ui). Empty serves from the root.",
-              "pattern": "^(/[^/?#\\s]+)*$",
+              "description": "Subpath to serve the app from behind a path-routing reverse proxy (e.g. /garage-ui). Empty serves from the root. Segments are limited to A-Za-z0-9 . _ ~ % + - and must not start with a path the server already serves (api, assets, auth, docs, health, login, metrics), matching what the backend accepts at boot.",
+              "pattern": "^[A-Za-z0-9._~%+/-]*$",
+              "not": {
+                "pattern": "(^|/)\\.\\.(/|$)|^/*([Aa][Pp][Ii]|[Aa][Ss][Ss][Ee][Tt][Ss]|[Aa][Uu][Tt][Hh]|[Dd][Oo][Cc][Ss]|[Hh][Ee][Aa][Ll][Tt][Hh]|[Ll][Oo][Gg][Ii][Nn]|[Mm][Ee][Tt][Rr][Ii][Cc][Ss])(/|$)"
+              },
               "default": ""
             },
             "max_body_size": {

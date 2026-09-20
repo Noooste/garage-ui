@@ -5,6 +5,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
+
+	"Noooste/garage-ui/pkg/logger"
 )
 
 // reservedFirstSegments are the path roots the server itself serves. A base
@@ -91,6 +94,11 @@ func NormalizeBasePath(raw string) (string, error) {
 	return "/" + strings.Join(kept, "/"), nil
 }
 
+// invalidBasePathOnce keeps the fallback warning to one line per process:
+// NormalizedBasePath is called from PrefixPath and ExternalURL, not just at
+// startup.
+var invalidBasePathOnce sync.Once
+
 // NormalizedBasePath returns the canonical base path. Config.Load rejects
 // invalid values up front, so callers that receive an already-validated config
 // can use this without handling an error; a value that never went through
@@ -98,6 +106,13 @@ func NormalizeBasePath(raw string) (string, error) {
 func (s ServerConfig) NormalizedBasePath() string {
 	normalized, err := NormalizeBasePath(s.BasePath)
 	if err != nil {
+		// Load rejects this up front, so getting here means a ServerConfig that
+		// bypassed it. Falling back to the root silently would mount the whole
+		// app at the wrong prefix with nothing in the logs to say why.
+		invalidBasePathOnce.Do(func() {
+			logger.Warn().Err(err).Str("base_path", s.BasePath).
+				Msg("Invalid server.base_path, falling back to serving from the root")
+		})
 		return ""
 	}
 	return normalized

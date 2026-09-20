@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 
@@ -100,5 +101,42 @@ func TestGetAuthorizationURL_CarriesBasePathRedirectURI(t *testing.T) {
 	const want = "redirect_uri=https%3A%2F%2Fhost.ts.net%2Fgarage-ui%2Fauth%2Foidc%2Fcallback"
 	if !strings.Contains(authURL, want) {
 		t.Errorf("authorization URL %q does not carry %q", authURL, want)
+	}
+}
+
+// Issue #107: the callback URI was prefixed but post_logout_redirect_uri was
+// still built from root_url alone. Behind a path-routing proxy that sends the
+// browser to a path this app does not own, and providers that validate the
+// value against their registered set reject the logout request outright.
+func TestPostLogoutRedirectURL_CarriesBasePath(t *testing.T) {
+	newService := func(basePath string) *Service {
+		return &Service{
+			authConfig:         &config.AuthConfig{OIDC: config.OIDCConfig{ClientID: "garage-ui"}},
+			serverConfig:       &config.ServerConfig{RootURL: "https://host.ts.net", BasePath: basePath},
+			endSessionEndpoint: "https://sso.example.com/logout",
+		}
+	}
+
+	for _, tt := range []struct{ basePath, want string }{
+		{"", "https://host.ts.net/login"},
+		{"/garage-ui", "https://host.ts.net/garage-ui/login"},
+		{"/admin/garage-ui", "https://host.ts.net/admin/garage-ui/login"},
+	} {
+		if got := newService(tt.basePath).postLogoutRedirectURL(); got != tt.want {
+			t.Errorf("base_path %q: postLogoutRedirectURL = %q, want %q", tt.basePath, got, tt.want)
+		}
+	}
+
+	// It also has to reach the IdP, not just be computed correctly.
+	logoutURL := newService("/garage-ui").LogoutURL("id-token")
+	if !strings.Contains(logoutURL, url.QueryEscape("https://host.ts.net/garage-ui/login")) {
+		t.Errorf("LogoutURL = %q, want it to carry the prefixed post_logout_redirect_uri", logoutURL)
+	}
+
+	// An explicitly configured value still wins.
+	svc := newService("/garage-ui")
+	svc.authConfig.OIDC.PostLogoutRedirectURL = "https://elsewhere.example/bye"
+	if got := svc.postLogoutRedirectURL(); got != "https://elsewhere.example/bye" {
+		t.Errorf("configured post_logout_redirect_url = %q, want it used untouched", got)
 	}
 }

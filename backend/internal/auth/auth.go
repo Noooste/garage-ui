@@ -188,7 +188,7 @@ func (a *Service) postLogoutRedirectURL() string {
 		return configured
 	}
 
-	return strings.TrimRight(a.serverConfig.RootURL, "/") + "/login"
+	return a.serverConfig.ExternalURL("/login")
 }
 
 // ExchangeCode exchanges an authorization code for tokens

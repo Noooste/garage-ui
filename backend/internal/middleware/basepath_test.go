@@ -114,3 +114,24 @@ func TestStripBasePath_EmptyIsPassThrough(t *testing.T) {
 		t.Errorf("downstream middleware ran %d times, want 1", counter.Load())
 	}
 }
+
+// Fiber routes case-insensitively, so a prefix that only matches exactly would
+// let /Garage-UI/... through unstripped: it reaches the SPA fallback, whose
+// skip-list is evaluated on the un-stripped path, and gets answered with the
+// HTML shell instead of the API's 401/404.
+func TestStripBasePath_MatchesPrefixCaseInsensitively(t *testing.T) {
+	var counter atomic.Int32
+	app := appWithStripper("/garage-ui", &counter)
+
+	for _, path := range []string{"/Garage-UI/health", "/GARAGE-UI/health", "/garage-ui/health"} {
+		status, body := get(t, app, path)
+		if status != http.StatusOK || body != "ok" {
+			t.Errorf("GET %s = %d %q, want 200 \"ok\"", path, status, body)
+		}
+	}
+
+	status, body := get(t, app, "/Garage-UI/api/v1/buckets/b1")
+	if status != http.StatusOK || body != "b1" {
+		t.Errorf("GET /Garage-UI/api/v1/buckets/b1 = %d %q, want 200 \"b1\"", status, body)
+	}
+}

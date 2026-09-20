@@ -580,11 +580,14 @@ func TestRoutes_BasePath_IndexHTMLByNameIsInjected(t *testing.T) {
 	}
 }
 
-// Review #6: without an explicit Path the session cookie defaults to "/" and is
-// sent to every other service sharing the hostname - which is exactly the
-// deployment shape a base path exists for.
-func TestRoutes_BasePath_SessionCookieIsScopedToThePrefix(t *testing.T) {
+// Review #6: without an explicit Path a cookie defaults to "/" and is sent to
+// every other service sharing the hostname - which is exactly the deployment
+// shape a base path exists for. This covers every auth cookie, not just the
+// session: the id token cookie carries the raw IdP token and leaks the same way.
+func TestRoutes_BasePath_AuthCookiesAreScopedToThePrefix(t *testing.T) {
 	f, _ := newOIDCFixtureWithBasePath(t, testBasePath)
+	want := testBasePath + "/"
+	idTokenName := f.Cfg.Auth.OIDC.IDTokenCookieName()
 
 	state := oidcState(t, f)
 	resp, err := f.App.Test(httptest.NewRequest(http.MethodGet, "/auth/oidc/callback?state="+state+"&code=c", nil))
@@ -593,35 +596,43 @@ func TestRoutes_BasePath_SessionCookieIsScopedToThePrefix(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	var session *http.Cookie
+	seen := map[string]bool{}
 	for _, c := range resp.Cookies() {
-		if c.Name == "session" {
-			session = c
+		seen[c.Name] = true
+		if c.Path != want {
+			t.Errorf("callback set cookie %q with Path = %q, want %q", c.Name, c.Path, want)
 		}
 	}
-	if session == nil {
-		t.Fatal("no session cookie set")
-	}
-	if session.Path != testBasePath+"/" {
-		t.Errorf("session cookie Path = %q, want %q", session.Path, testBasePath+"/")
+	for _, name := range []string{"session", idTokenName} {
+		if !seen[name] {
+			t.Errorf("callback did not set the %q cookie", name)
+		}
 	}
 
-	// The logout handler has to clear it under the same path, or the browser
-	// keeps the original cookie.
+	// The logout handler has to clear them under the same path, or the browser
+	// keeps the originals.
 	logoutResp, err := f.App.Test(httptest.NewRequest(http.MethodPost, "/auth/oidc/logout", nil))
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	_ = logoutResp.Body.Close()
+
+	cleared := map[string]bool{}
 	for _, c := range logoutResp.Cookies() {
-		if c.Name == "session" && c.Path != testBasePath+"/" {
-			t.Errorf("logout cookie Path = %q, want %q", c.Path, testBasePath+"/")
+		cleared[c.Name] = true
+		if c.Path != want {
+			t.Errorf("logout cleared cookie %q with Path = %q, want %q", c.Name, c.Path, want)
+		}
+	}
+	for _, name := range []string{"session", idTokenName} {
+		if !cleared[name] {
+			t.Errorf("logout did not clear the %q cookie", name)
 		}
 	}
 }
 
-// At the root the cookie keeps the historical scope.
-func TestRoutes_NoBasePath_SessionCookieStaysAtRoot(t *testing.T) {
+// At the root the cookies keep the historical scope.
+func TestRoutes_NoBasePath_AuthCookiesStayAtRoot(t *testing.T) {
 	f, _ := newOIDCFixtureWithBasePath(t, "")
 
 	state := oidcState(t, f)
@@ -632,8 +643,8 @@ func TestRoutes_NoBasePath_SessionCookieStaysAtRoot(t *testing.T) {
 	_ = resp.Body.Close()
 
 	for _, c := range resp.Cookies() {
-		if c.Name == "session" && c.Path != "/" {
-			t.Errorf("session cookie Path = %q, want %q", c.Path, "/")
+		if c.Path != "/" {
+			t.Errorf("cookie %q Path = %q, want %q", c.Name, c.Path, "/")
 		}
 	}
 }

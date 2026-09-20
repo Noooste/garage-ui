@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import html from '../../index.html?raw';
 import viteConfig from '../../vite.config.ts?raw';
+import css from '../index.css?raw';
 import { normalizeVitePrefix } from '../../vite-base-path';
 
 /**
@@ -85,5 +86,39 @@ describe('normalizeVitePrefix', () => {
     const href = `${normalizeVitePrefix('garage-ui')}/`;
     const resolved = new URL('./garage.png', new URL(href, 'https://host/buckets/foo')).href;
     expect(resolved).toBe('https://host/garage-ui/garage.png');
+  });
+});
+
+/**
+ * The normalizer is documented as a mirror of config.NormalizeBasePath. Where
+ * the backend refuses to boot, the build has to fail too: a dist/ baked with a
+ * prefix the server rejects is worse than a build error, because it only shows
+ * up as a CrashLoopBackOff. The value is also interpolated into HTML
+ * attributes, so the charset is what keeps it from breaking out of one.
+ */
+describe('normalizeVitePrefix rejections', () => {
+  it.each([
+    ['/api', 'reserved first segment'],
+    ['/Health', 'reserved first segment, case-folded'],
+    ['/assets', 'reserved first segment'],
+    ['/a/../b', '".." segment'],
+    ['/a<b>', 'character outside the segment charset'],
+    ['/a"b', 'character outside the segment charset'],
+    ['/a b', 'character outside the segment charset'],
+    ['/a?b', 'query separator'],
+    ['/a#b', 'fragment separator'],
+    ['/a$1b', '"$" would be a replacement reference'],
+  ])('rejects %o (%s)', (raw) => {
+    expect(() => normalizeVitePrefix(raw)).toThrow(/VITE_BASE_PATH/);
+  });
+});
+
+describe('index.css', () => {
+  it('references fonts relatively so they follow the deployment prefix', () => {
+    // url(...) resolves against the stylesheet, not the document, so a leading
+    // slash is origin-absolute and <base href> cannot rebase it: every face
+    // 404s under a subpath and the UI silently falls back to system fonts.
+    const absolute = [...css.matchAll(/url\(\s*['"]?(\/[^)'"]*)/g)].map((match) => match[1]);
+    expect(absolute).toEqual([]);
   });
 });

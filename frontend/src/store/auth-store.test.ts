@@ -110,4 +110,32 @@ describe('logout', () => {
 
     expect(location.href).toBe('/garage-ui/login');
   });
+
+  // The IdP's end_session_endpoint is an absolute URL that already carries
+  // post_logout_redirect_uri. Prefixing it turns it into an in-app path, the
+  // SPA shell answers, and the SSO session is never ended - so the next login
+  // silently skips credentials.
+  it('sends the IdP logout URL through untouched', async () => {
+    const location = stubLocation();
+    const useAuthStore = await loadStore('/garage-ui');
+    useAuthStore.setState({ config: { admin: { enabled: false }, oidc: { enabled: true }, token: { enabled: false } } });
+    const idpLogout =
+      'https://keycloak.example/realms/r/protocol/openid-connect/logout?id_token_hint=abc';
+    logoutOIDC.mockResolvedValueOnce({ data: { logout_url: idpLogout } });
+
+    await useAuthStore.getState().logout();
+
+    expect(location.href).toBe(idpLogout);
+  });
+
+  it('falls back to the prefixed login page when the provider has no end_session_endpoint', async () => {
+    const location = stubLocation();
+    const useAuthStore = await loadStore('/garage-ui');
+    useAuthStore.setState({ config: { admin: { enabled: false }, oidc: { enabled: true }, token: { enabled: false } } });
+    logoutOIDC.mockResolvedValueOnce({ data: {} });
+
+    await useAuthStore.getState().logout();
+
+    expect(location.href).toBe('/garage-ui/login');
+  });
 });

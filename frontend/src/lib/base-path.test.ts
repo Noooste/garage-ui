@@ -4,7 +4,6 @@ import {
   normalizeBasePath,
   resolveBasePath,
   routerBasename,
-  stripBasePath,
   withBasePath,
 } from './base-path';
 
@@ -132,23 +131,6 @@ describe('withBasePath', () => {
   });
 });
 
-describe('stripBasePath', () => {
-  it.each([
-    ['/garage-ui/login', '/garage-ui', '/login'],
-    ['/garage-ui', '/garage-ui', '/'],
-    ['/garage-ui/', '/garage-ui', '/'],
-    ['/login', '', '/login'],
-    ['/garage-ui/buckets/x/objects/a/b.txt', '/garage-ui', '/buckets/x/objects/a/b.txt'],
-  ])('strips %o under %o', (path, basePath, expected) => {
-    expect(stripBasePath(path, basePath)).toBe(expected);
-  });
-
-  it('leaves paths outside the prefix alone', () => {
-    expect(stripBasePath('/other/page', '/garage-ui')).toBe('/other/page');
-    // A prefix must match on a segment boundary, not as a string prefix.
-    expect(stripBasePath('/garage-ui-other/page', '/garage-ui')).toBe('/garage-ui-other/page');
-  });
-});
 
 describe('routerBasename', () => {
   it('is "/" at the root, because React Router rejects an empty basename', () => {

@@ -655,9 +655,10 @@ func TestRoutes_SPAFallback_HonorsConfiguredFrontendPath(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/buckets", nil)
 	resp := expectStatus(t, f.App, req, 200)
-	body := make([]byte, 64)
-	n, _ := resp.Body.Read(body)
-	if !strings.Contains(string(body[:n]), "spa") {
-		t.Errorf("body = %q, want index.html content", string(body[:n]))
+	// Read it all: the base-path injection inserts its tags right after the
+	// doctype, which pushes the marker past any fixed-size prefix.
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "spa") {
+		t.Errorf("body = %q, want index.html content", string(body))
 	}
 }

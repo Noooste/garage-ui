@@ -337,6 +337,7 @@ func SetupRoutes(
 					c.Cookie(&fiber.Cookie{
 						Name:     cfg.Auth.OIDC.IDTokenCookieName(),
 						Value:    rawIDToken,
+						Path:     cookiePath,
 						MaxAge:   cfg.Auth.OIDC.SessionMaxAge,
 						Secure:   cfg.Auth.OIDC.CookieSecure,
 						HTTPOnly: true,
@@ -381,6 +382,7 @@ func SetupRoutes(
 				c.Cookie(&fiber.Cookie{
 					Name:   cfg.Auth.OIDC.IDTokenCookieName(),
 					Value:  "",
+					Path:   cookiePath,
 					MaxAge: -1,
 				})
 
@@ -404,6 +406,18 @@ func SetupRoutes(
 	// Check if frontend path exists
 	if _, err := os.Stat(cfg.Server.FrontendPath); err == nil {
 		frontendPath := cfg.Server.FrontendPath
+
+		// The frontend build is deployment-agnostic (relative asset URLs); the
+		// public prefix is injected into index.html so one image can serve any
+		// subpath without a rebuild. Both inputs are fixed at startup, so the
+		// shell is built once here rather than re-read and re-scanned on every
+		// deep link. It is cached for the process lifetime: a rebuilt
+		// index.html needs a restart to be picked up.
+		indexPath := filepath.Join(frontendPath, "index.html")
+		var shell []byte
+		if raw, err := os.ReadFile(indexPath); err == nil {
+			shell = InjectBasePath(raw, basePath)
+		}
 
 		// SPA fallback - serve index.html for all non-API routes
 		app.Use(func(c fiber.Ctx) error {
@@ -433,17 +447,11 @@ func SetupRoutes(
 			}
 
 			c.Set(fiber.HeaderCacheControl, "no-cache")
-			indexPath := filepath.Join(frontendPath, "index.html")
-
-			// The frontend build is deployment-agnostic (relative asset URLs);
-			// the public prefix is injected here at request time, so one image
-			// can serve any subpath without a rebuild.
-			shell, err := os.ReadFile(indexPath)
-			if err != nil {
+			if shell == nil {
 				return c.SendFile(indexPath)
 			}
 			c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
-			return c.Send(InjectBasePath(shell, basePath))
+			return c.Send(shell)
 		})
 	}
 }
@@ -472,13 +480,13 @@ func InjectBasePath(document []byte, basePath string) []byte {
 	metaTag := []byte(`<meta name="garage-ui-base-path" content="` + escaped + `">`)
 
 	if baseHrefRe.Match(document) {
-		document = baseHrefRe.ReplaceAll(document, baseTag)
+		document = baseHrefRe.ReplaceAllLiteral(document, baseTag)
 	} else {
 		document = insertIntoHead(document, baseTag)
 	}
 
 	if baseMetaRe.Match(document) {
-		document = baseMetaRe.ReplaceAll(document, metaTag)
+		document = baseMetaRe.ReplaceAllLiteral(document, metaTag)
 	} else {
 		document = insertIntoHead(document, metaTag)
 	}

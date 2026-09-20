@@ -176,8 +176,10 @@ export const useAuthStore = create<AuthStore>()(
           error: null
         });
 
-        // Redirect to login page (prefixed when deployed on a subpath)
-        window.location.href = withBasePath(logoutUrl ?? '/login');
+        // The IdP's end_session_endpoint is an absolute URL and already carries
+        // post_logout_redirect_uri, so it must not be prefixed. Only the in-app
+        // fallback is a local path.
+        window.location.href = logoutUrl ?? withBasePath('/login');
       },
     }),
     {

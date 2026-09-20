@@ -97,17 +97,6 @@ export function withBasePath(path: string, basePath: string = BASE_PATH): string
 }
 
 /**
- * Strips the base path from a browser path, so route comparisons work the same
- * under a subpath as at the root. Paths outside the prefix are returned as-is.
- */
-export function stripBasePath(path: string, basePath: string = BASE_PATH): string {
-  if (basePath === '') return path;
-  if (path === basePath) return '/';
-  if (path.startsWith(`${basePath}/`)) return path.slice(basePath.length);
-  return path;
-}
-
-/**
  * React Router's basename. '/' is what the router expects for a root
  * deployment; it rejects an empty string.
  */

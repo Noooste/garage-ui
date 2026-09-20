@@ -10,12 +10,15 @@ import {normalizeVitePrefix} from './vite-base-path'
 function basePathTags(normalized: string): Plugin {
   return {
     name: 'garage-ui-base-path-tags',
+    // Function replacers: a string replacement would expand $& and $1 from
+    // the prefix. normalizeVitePrefix already rejects those characters, this
+    // is the second layer.
     transformIndexHtml(html) {
       return html
-        .replace(/<base[^>]*\shref\s*=\s*"[^"]*"[^>]*>/i, `<base href="${normalized}/">`)
+        .replace(/<base[^>]*\shref\s*=\s*"[^"]*"[^>]*>/i, () => `<base href="${normalized}/">`)
         .replace(
           /<meta[^>]*\sname\s*=\s*"garage-ui-base-path"[^>]*>/i,
-          `<meta name="garage-ui-base-path" content="${normalized}">`,
+          () => `<meta name="garage-ui-base-path" content="${normalized}">`,
         )
     },
   }

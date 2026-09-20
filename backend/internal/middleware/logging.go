@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"strings"
 	"time"
 
 	logpkg "Noooste/garage-ui/pkg/logger"
@@ -27,13 +28,22 @@ func Logging(base zerolog.Logger) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		requestID, _ := c.Locals(RequestIDLocalsKey).(string)
 
-		reqLogger := base.With().
+		ctx := base.With().
 			Str("request_id", requestID).
 			Str("method", c.Method()).
 			Str("path", c.Path()).
 			Str("remote_ip", c.IP()).
-			Str("user_agent", c.Get("User-Agent")).
-			Logger()
+			Str("user_agent", c.Get("User-Agent"))
+
+		// With base_path set, StripBasePath rewrites the path before this runs,
+		// so c.Path() is not what the client asked for. Record the original too
+		// when they differ, otherwise a misrouting proxy is invisible in the
+		// logs. The query string is dropped: it can carry tokens.
+		if original, _, _ := strings.Cut(c.OriginalURL(), "?"); original != c.Path() {
+			ctx = ctx.Str("request_path", original)
+		}
+
+		reqLogger := ctx.Logger()
 
 		c.Locals(LoggerLocalsKey, reqLogger)
 		c.SetContext(logpkg.IntoCtx(c.Context(), reqLogger))

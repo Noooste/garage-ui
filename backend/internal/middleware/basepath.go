@@ -43,12 +43,17 @@ func StripBasePath(basePath string) fiber.Handler {
 		}
 
 		path := c.Path()
-		if path != basePath && !strings.HasPrefix(path, prefix) {
+		// Fiber routes case-insensitively by default, so the prefix has to be
+		// matched the same way. config.NormalizeBasePath folds case in its
+		// reserved-segment check for the same reason. Matching exactly would let
+		// /Garage-UI/api/v1/... through unstripped, and the SPA fallback would
+		// answer it with 200 plus the HTML shell instead of 401 or 404.
+		if !strings.EqualFold(path, basePath) && !hasPrefixFold(path, prefix) {
 			return c.Next()
 		}
 
 		c.Locals(basePathStrippedKey, true)
-		stripped := strings.TrimPrefix(path, basePath)
+		stripped := path[len(basePath):]
 		if stripped == "" {
 			stripped = "/"
 		}
@@ -56,4 +61,10 @@ func StripBasePath(basePath string) fiber.Handler {
 		c.Path(stripped)
 		return c.RestartRouting()
 	}
+}
+
+// hasPrefixFold is strings.HasPrefix with ASCII case folding. Slicing by prefix
+// length is safe because NormalizeBasePath only accepts ASCII segments.
+func hasPrefixFold(s, prefix string) bool {
+	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
 }
