@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"syscall"
 	"time"
+        "os/user"
 
 	"Noooste/garage-ui/internal/auth"
 	"Noooste/garage-ui/internal/authz"
@@ -93,6 +94,21 @@ func main() {
 		Level:  cfg.Logging.Level,
 		Format: cfg.Logging.Format,
 	})
+
+        // Test if directory can be read
+        dir, err := os.Open(cfg.Server.FrontendPath)
+        if err != nil {
+                currentUser, uErr := user.Current()
+                username := "unknown"
+                _ = username
+                if uErr == nil {
+                        username = currentUser.Username
+                }
+                // Drop an explicit error log and terminate the process gracefully
+                logger.Fatal().
+                Msgf("Can't access the frontend with FrontendPath=%s with the running user: username=%s. Check if the FrontendPath=%s exist and/or the user runs garage-ui has read access to it.", cfg.Server.FrontendPath, username, cfg.Server.FrontendPath)
+        }
+        dir.Close()
 
 	// Now log with the properly configured logger
 	logger.Info().
