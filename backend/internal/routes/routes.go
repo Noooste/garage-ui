@@ -403,57 +403,59 @@ func SetupRoutes(
 		cfg.Server.FrontendPath = "./frontend/dist"
 	}
 
-	// Check if frontend path exists
-	if _, err := os.Stat(cfg.Server.FrontendPath); err == nil {
-		frontendPath := cfg.Server.FrontendPath
+	// The frontend build is deployment-agnostic (relative asset URLs); the
+	// public prefix is injected into index.html so one image can serve any
+	// subpath without a rebuild. Both inputs are fixed at startup, so the
+	// shell is built once here rather than re-read and re-scanned on every
+	// deep link. It is cached for the process lifetime: a rebuilt
+	// index.html needs a restart to be picked up.
+	frontendPath := cfg.Server.FrontendPath
+	indexPath := filepath.Join(frontendPath, "index.html")
+	raw, readErr := os.ReadFile(indexPath)
+	if readErr != nil {
+		// A missing dist and one the service user cannot read fail here the
+		// same way, and used to fail silently (https://github.com/Noooste/garage-ui/issues/127).
+		abs, absErr := filepath.Abs(indexPath)
+		if absErr != nil {
+			abs = indexPath
+		}
+		logger.Warn().Err(readErr).Str("path", abs).Int("uid", os.Getuid()).
+			Msg("frontend not served, every non-API route will return 404")
+		return
+	}
+	shell := InjectBasePath(raw, basePath)
 
-		// The frontend build is deployment-agnostic (relative asset URLs); the
-		// public prefix is injected into index.html so one image can serve any
-		// subpath without a rebuild. Both inputs are fixed at startup, so the
-		// shell is built once here rather than re-read and re-scanned on every
-		// deep link. It is cached for the process lifetime: a rebuilt
-		// index.html needs a restart to be picked up.
-		indexPath := filepath.Join(frontendPath, "index.html")
-		var shell []byte
-		if raw, err := os.ReadFile(indexPath); err == nil {
-			shell = InjectBasePath(raw, basePath)
+	// SPA fallback - serve index.html for all non-API routes
+	app.Use(func(c fiber.Ctx) error {
+		path := c.Path()
+
+		if strings.HasPrefix(path, "/api/") ||
+			strings.HasPrefix(path, "/auth") ||
+			strings.HasPrefix(path, "/health") ||
+			strings.HasPrefix(path, "/docs") ||
+			path == "/metrics" {
+			logger.Debug().Str("path", path).Msg("API or health check route, skipping SPA fallback")
+			return c.Next()
 		}
 
-		// SPA fallback - serve index.html for all non-API routes
-		app.Use(func(c fiber.Ctx) error {
-			path := c.Path()
-
-			if strings.HasPrefix(path, "/api/") ||
-				strings.HasPrefix(path, "/auth") ||
-				strings.HasPrefix(path, "/health") ||
-				strings.HasPrefix(path, "/docs") ||
-				path == "/metrics" {
-				logger.Debug().Str("path", path).Msg("API or health check route, skipping SPA fallback")
-				return c.Next()
+		// Try to serve static files first. index.html is deliberately not
+		// served from here: it is the one file that has to go through the
+		// base-path injection below, and requesting it by name would
+		// otherwise hand out the build's placeholder base href.
+		filePath := filepath.Join(frontendPath, path)
+		if info, err := os.Stat(filePath); path != "/index.html" && err == nil && !info.IsDir() {
+			if strings.HasPrefix(path, "/assets/") {
+				c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
+			} else {
+				c.Set(fiber.HeaderCacheControl, "no-cache")
 			}
+			return c.SendFile(filePath)
+		}
 
-			// Try to serve static files first. index.html is deliberately not
-			// served from here: it is the one file that has to go through the
-			// base-path injection below, and requesting it by name would
-			// otherwise hand out the build's placeholder base href.
-			filePath := filepath.Join(frontendPath, path)
-			if info, err := os.Stat(filePath); path != "/index.html" && err == nil && !info.IsDir() {
-				if strings.HasPrefix(path, "/assets/") {
-					c.Set(fiber.HeaderCacheControl, "public, max-age=31536000, immutable")
-				} else {
-					c.Set(fiber.HeaderCacheControl, "no-cache")
-				}
-				return c.SendFile(filePath)
-			}
-
-			c.Set(fiber.HeaderCacheControl, "no-cache")
-			if shell == nil {
-				return c.SendFile(indexPath)
-			}
-			c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
-			return c.Send(shell)
-		})
-	}
+		c.Set(fiber.HeaderCacheControl, "no-cache")
+		c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
+		return c.Send(shell)
+	})
 }
 
 var (

@@ -662,3 +662,17 @@ func TestRoutes_SPAFallback_HonorsConfiguredFrontendPath(t *testing.T) {
 		t.Errorf("body = %q, want index.html content", string(body))
 	}
 }
+
+func TestRoutes_SPAFallback_UnreadableIndex_DoesNotMount(t *testing.T) {
+	// Directory exists, index.html unreadable: same shape as a dist owned by
+	// another user on a non-root service (issue #127). Must not mount.
+	dist := t.TempDir()
+	t.Chdir(t.TempDir())
+
+	f := newTestApp(t, func(cfg *config.Config) {
+		cfg.Server.FrontendPath = dist
+	})
+
+	req := httptest.NewRequest("GET", "/random/spa/path", nil)
+	expectStatus(t, f.App, req, 404)
+}
