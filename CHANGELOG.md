@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/Noooste/garage-ui/compare/v0.13.0...v0.13.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **routes:** handle unreadable index.html for SPA fallback to prevent 404 errors ([7da65bc](https://github.com/Noooste/garage-ui/commit/7da65bc105164c1681e6f7485f2a80acdbb3f266))
+
 ## [0.13.0](https://github.com/Noooste/garage-ui/compare/v0.12.1...v0.13.0) (2026-09-20)
 
 
