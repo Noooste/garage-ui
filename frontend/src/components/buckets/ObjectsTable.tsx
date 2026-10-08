@@ -78,7 +78,10 @@ export function ObjectsTable({
 }: ObjectsTableProps) {
   const navigate = useNavigate();
   const canDelete = Boolean(onDeleteObject);
-  const { sort, toggleSort } = useSort<SortColumn>({ column: 'name', direction: 'asc' });
+  const { sort, toggleSort } = useSort<SortColumn>(
+    { column: 'name', direction: 'asc' },
+    { size: 'desc', modified: 'desc' },
+  );
   // Store tokens for each page: [undefined (page 1), token1 (page 2), token2 (page 3), ...]
   const [pageTokens, setPageTokens] = useState<(string | undefined)[]>([undefined]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -183,6 +186,19 @@ export function ObjectsTable({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSort = (column: SortColumn) => {
+    toggleSort(column);
+    // A client-paginated list is re-sorted as a whole, so start again at its
+    // first page. Server pages only sort their own rows, so the page stays.
+    if (clientPaginated) setCurrentPageIndex(0);
+  };
+
+  // Browsing is server-paginated, so a column sort can only reorder the rows
+  // of the page on screen. Say so once there is more than one page.
+  const pageInfo = isDeepSearching
+    ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
+    : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}${hasPrevious || hasNext ? ' • sorted within this page' : ''}`;
+
   const handleItemsPerPageChange = (value: string) => {
     onItemsPerPageChange(Number(value));
     setPageTokens([undefined]); // Reset to first page
@@ -219,15 +235,15 @@ export function ObjectsTable({
                 />
               </TableHead>
             )}
-          <SortableTableHead column="name" sort={sort} onSort={toggleSort}>
+          <SortableTableHead column="name" sort={sort} onSort={handleSort}>
             Objects
           </SortableTableHead>
           <TableHead className="hidden lg:table-cell">Type</TableHead>
           <TableHead className="hidden lg:table-cell">Storage Class</TableHead>
-          <SortableTableHead column="size" sort={sort} onSort={toggleSort} className="hidden sm:table-cell">
+          <SortableTableHead column="size" sort={sort} onSort={handleSort} className="hidden sm:table-cell">
             Size
           </SortableTableHead>
-          <SortableTableHead column="modified" sort={sort} onSort={toggleSort} className="hidden sm:table-cell">
+          <SortableTableHead column="modified" sort={sort} onSort={handleSort} className="hidden sm:table-cell">
             Modified
           </SortableTableHead>
           <TableHead className="w-[50px]"></TableHead>
@@ -445,16 +461,10 @@ export function ObjectsTable({
         {/* Pagination info and controls */}
         <div className="flex w-full flex-row items-center justify-center gap-2 sm:w-auto sm:gap-4">
           <span
-            title={
-              isDeepSearching
-                ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
-                : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`
-            }
+            title={pageInfo}
             className="min-w-0 truncate whitespace-nowrap text-left text-sm text-muted-foreground"
           >
-            {isDeepSearching
-              ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
-              : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`}
+            {pageInfo}
           </span>
 
           <div className="flex shrink-0 items-center justify-center gap-2">

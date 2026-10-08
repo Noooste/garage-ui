@@ -27,7 +27,7 @@ function deriveHealth(health: ClusterHealth | null): { label: HealthLabel; tone:
 export function Dashboard() {
   const { metrics: metricsQuery, buckets: bucketsQuery, health: healthQuery, isLoading } = useDashboardData();
   const metrics = metricsQuery.data;
-  const buckets = bucketsQuery.data ?? [];
+  const buckets = bucketsQuery.data;
   const clusterHealth = healthQuery.data ?? null;
   const health = deriveHealth(clusterHealth);
   // Largest buckets first, so the breakdown reads as a ranking of storage use.
@@ -37,6 +37,14 @@ export function Dashboard() {
         size: (bucket) => bucket.size,
       }),
     [metrics?.usageByBucket],
+  );
+  // Garage lists buckets in ID order, so pick the newest ones explicitly.
+  const recentBuckets = useMemo(
+    () =>
+      sortItems(buckets ?? [], { column: 'created', direction: 'desc' }, {
+        created: (bucket) => new Date(bucket.creationDate),
+      }).slice(0, 5),
+    [buckets],
   );
 
   return (
@@ -155,7 +163,7 @@ export function Dashboard() {
 
           {/* Recent buckets */}
           <Card title="Recent buckets" description="Your most recently created buckets">
-            {buckets.length === 0 ? (
+            {recentBuckets.length === 0 ? (
               <EmptyState
                 icon={<Database />}
                 title="No buckets yet"
@@ -164,7 +172,7 @@ export function Dashboard() {
               />
             ) : (
               <ul className="divide-y divide-[var(--border)]">
-                {buckets.slice(0, 5).map((bucket) => (
+                {recentBuckets.map((bucket) => (
                   <li key={bucket.name}>
                     <Link
                       to={`/buckets/${bucket.name}/objects`}

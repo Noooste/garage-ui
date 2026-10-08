@@ -51,7 +51,7 @@ describe('BucketListView sorting', () => {
     fireEvent.click(within(header('Size')).getByRole('button'));
     expect(rowNames()).toEqual(['Archive', 'media', 'logs']);
     expect(header('Size')).toHaveAttribute('aria-sort', 'descending');
-    expect(header('Name')).toHaveAttribute('aria-sort', 'none');
+    expect(header('Name')).not.toHaveAttribute('aria-sort');
 
     fireEvent.click(within(header('Size')).getByRole('button'));
     expect(rowNames()).toEqual(['logs', 'media', 'Archive']);

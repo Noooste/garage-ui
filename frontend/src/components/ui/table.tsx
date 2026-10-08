@@ -88,7 +88,8 @@ function SortableTableHead<K extends string>({
   const Icon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
   return (
     <TableHead
-      aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+      // Only the active column carries aria-sort, per the ARIA sortable-table pattern.
+      aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
       className={className}
       {...props}
     >

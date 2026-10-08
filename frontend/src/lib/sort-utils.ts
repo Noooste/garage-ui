@@ -39,12 +39,16 @@ export function sortItems<T, K extends string>(
 ): T[] {
   const accessor = accessors[sort.column];
   const factor = sort.direction === 'asc' ? 1 : -1;
-  return [...items].sort((x, y) => {
-    const a = accessor(x);
-    const b = accessor(y);
-    const aMissing = isMissing(a);
-    const bMissing = isMissing(b);
-    if (aMissing || bMissing) return aMissing === bMissing ? 0 : aMissing ? 1 : -1;
-    return compareAscending(a, b) * factor;
-  });
+  // Read each value once up front rather than on every comparison; accessors
+  // may parse dates or strip path prefixes.
+  return items
+    .map((item) => {
+      const value = accessor(item);
+      return { item, value, missing: isMissing(value) };
+    })
+    .sort((x, y) => {
+      if (x.missing || y.missing) return x.missing === y.missing ? 0 : x.missing ? 1 : -1;
+      return compareAscending(x.value, y.value) * factor;
+    })
+    .map(({ item }) => item);
 }
