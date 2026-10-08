@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { AlertCircle, Database, FolderOpen, HardDrive, Server, Zap } from 'lucide-react';
 import { Link } from 'react-router';
 import { PageHeader } from '@/components/ui/page-header';
@@ -6,6 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { BucketUsageChart } from '@/components/charts/BucketUsageChart';
 import { useDashboardData } from '@/hooks/useApi';
 import { formatBytes } from '@/lib/file-utils';
+import { sortItems } from '@/lib/sort-utils';
 import type { ClusterHealth } from '@/types';
 
 type StatTone = 'primary' | 'destructive' | 'neutral';
@@ -28,6 +30,14 @@ export function Dashboard() {
   const buckets = bucketsQuery.data ?? [];
   const clusterHealth = healthQuery.data ?? null;
   const health = deriveHealth(clusterHealth);
+  // Largest buckets first, so the breakdown reads as a ranking of storage use.
+  const usageByBucket = useMemo(
+    () =>
+      sortItems(metrics?.usageByBucket ?? [], { column: 'size', direction: 'desc' }, {
+        size: (bucket) => bucket.size,
+      }),
+    [metrics?.usageByBucket],
+  );
 
   return (
     <div>
@@ -108,17 +118,17 @@ export function Dashboard() {
           {/* Charts */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Card title="Storage usage by bucket" description="Distribution of storage across buckets">
-              {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
-                <BucketUsageChart data={metrics.usageByBucket} />
+              {usageByBucket.length > 0 ? (
+                <BucketUsageChart data={usageByBucket} />
               ) : (
                 <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">No data available</div>
               )}
             </Card>
 
             <Card title="Breakdown" description="Detailed breakdown of storage across all buckets">
-              {metrics?.usageByBucket && metrics.usageByBucket.length > 0 ? (
+              {usageByBucket.length > 0 ? (
                 <div className="space-y-4">
-                  {metrics.usageByBucket.map((bucket) => (
+                  {usageByBucket.map((bucket) => (
                     <div key={bucket.bucketName} className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2 text-[13.5px]">
                         <span className="truncate font-medium">{bucket.bucketName}</span>

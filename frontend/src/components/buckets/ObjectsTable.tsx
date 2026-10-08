@@ -3,7 +3,7 @@ import {useNavigate} from 'react-router';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
+import {SortableTableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip';
 import {
   DropdownMenu,
@@ -15,6 +15,8 @@ import {
 import {ChevronLeft, ChevronRight, Download, Eye, FileIcon, FolderIcon, Loader2, MoreVertical, Trash2} from 'lucide-react';
 import {Select, SelectOption} from '@/components/ui/select';
 import {downloadObject, formatBytes, formatRelativeTime} from '@/lib/file-utils';
+import {sortItems} from '@/lib/sort-utils';
+import {useSort} from '@/hooks/useSort';
 import type {S3Object} from '@/types';
 
 interface ObjectsTableProps {
@@ -48,7 +50,6 @@ interface ObjectsTableProps {
 }
 
 type SortColumn = 'name' | 'size' | 'modified';
-type SortDirection = 'asc' | 'desc';
 
 export function ObjectsTable({
   bucketName,
@@ -77,8 +78,7 @@ export function ObjectsTable({
 }: ObjectsTableProps) {
   const navigate = useNavigate();
   const canDelete = Boolean(onDeleteObject);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const { sort, toggleSort } = useSort<SortColumn>({ column: 'name', direction: 'asc' });
   // Store tokens for each page: [undefined (page 1), token1 (page 2), token2 (page 3), ...]
   const [pageTokens, setPageTokens] = useState<(string | undefined)[]>([undefined]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -107,33 +107,14 @@ export function ObjectsTable({
     // updates once typing pauses (matches the debounced server request).
     const query = filterQuery.toLowerCase();
     const filtered = objects.filter((obj) => obj.key.toLowerCase().includes(query));
-    return [...filtered].sort((a, b) => {
-      const aIsFolder = a.isFolder ? 1 : 0;
-      const bIsFolder = b.isFolder ? 1 : 0;
-      if (aIsFolder !== bIsFolder) return bIsFolder - aIsFolder;
-
-      let compareValue = 0;
-      switch (sortColumn) {
-        case 'name': {
-          const aName = a.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
-          const bName = b.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
-          compareValue = aName.localeCompare(bName);
-          break;
-        }
-        case 'size':
-          compareValue = a.size - b.size;
-          break;
-        case 'modified': {
-          const aDate = new Date(a.lastModified).getTime();
-          const bDate = new Date(b.lastModified).getTime();
-          compareValue = aDate - bDate;
-          break;
-        }
-      }
-
-      return sortDirection === 'asc' ? compareValue : -compareValue;
+    const sorted = sortItems(filtered, sort, {
+      name: (obj) => obj.key.replace(currentPath, '').replace(/\/$/, ''),
+      size: (obj) => obj.size,
+      modified: (obj) => (obj.lastModified ? new Date(obj.lastModified) : undefined),
     });
-  }, [objects, filterQuery, sortColumn, sortDirection, currentPath]);
+    // Folders always stay above files, whatever the sort column.
+    return [...sorted.filter((obj) => obj.isFolder), ...sorted.filter((obj) => !obj.isFolder)];
+  }, [objects, filterQuery, sort, currentPath]);
 
   // Reset pagination on path navigation or when a search begins/ends. Search
   // results are a single flat list, so page-token state must not leak across
@@ -208,15 +189,6 @@ export function ObjectsTable({
     setCurrentPageIndex(0);
   };
 
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
   return (
     <>
       <div className="overflow-x-auto">
@@ -247,26 +219,17 @@ export function ObjectsTable({
                 />
               </TableHead>
             )}
-          <TableHead
-            className="cursor-pointer hover:bg-muted/50"
-            onClick={() => handleSort('name')}
-          >
-            Objects {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
-          </TableHead>
+          <SortableTableHead column="name" sort={sort} onSort={toggleSort}>
+            Objects
+          </SortableTableHead>
           <TableHead className="hidden lg:table-cell">Type</TableHead>
           <TableHead className="hidden lg:table-cell">Storage Class</TableHead>
-          <TableHead
-            className="hidden sm:table-cell cursor-pointer hover:bg-muted/50"
-            onClick={() => handleSort('size')}
-          >
-            Size {sortColumn === 'size' && (sortDirection === 'asc' ? '↑' : '↓')}
-          </TableHead>
-          <TableHead
-            className="hidden sm:table-cell cursor-pointer hover:bg-muted/50"
-            onClick={() => handleSort('modified')}
-          >
-            Modified {sortColumn === 'modified' && (sortDirection === 'asc' ? '↑' : '↓')}
-          </TableHead>
+          <SortableTableHead column="size" sort={sort} onSort={toggleSort} className="hidden sm:table-cell">
+            Size
+          </SortableTableHead>
+          <SortableTableHead column="modified" sort={sort} onSort={toggleSort} className="hidden sm:table-cell">
+            Modified
+          </SortableTableHead>
           <TableHead className="w-[50px]"></TableHead>
         </TableRow>
       </TableHeader>
