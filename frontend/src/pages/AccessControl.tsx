@@ -5,7 +5,7 @@ import {PageHeader} from '@/components/ui/page-header';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Badge} from '@/components/ui/badge';
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table';
+import {SortableTableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from '@/components/ui/table';
 import {
   Dialog,
   DialogBody,
@@ -33,9 +33,20 @@ import {useQueryClient} from '@tanstack/react-query';
 import {accessApi, bucketsApi} from '@/lib/api';
 import {queryKeys} from '@/lib/query-client';
 import {formatDate} from '@/lib/utils';
+import {sortItems, type SortValue} from '@/lib/sort-utils';
+import {useSort} from '@/hooks/useSort';
 import type {AccessKey, Bucket, BucketPermission} from '@/types';
 import {AlertTriangle, Calendar, Copy, Database, Edit, Key, KeyRound, Loader2, MoreVertical, Plus, Search, ShieldCheck, ShieldX, Trash2,} from 'lucide-react';
 import {toast} from 'sonner';
+
+type KeySortColumn = 'name' | 'accessKeyId' | 'status' | 'created';
+
+const keySortAccessors: Record<KeySortColumn, (key: AccessKey) => SortValue> = {
+  name: (key) => key.name,
+  accessKeyId: (key) => key.accessKeyId,
+  status: (key) => key.status,
+  created: (key) => (key.createdAt ? new Date(key.createdAt) : undefined),
+};
 
 // Copying must not also open the key's row.
 async function copyAccessKeyId(e: MouseEvent, accessKeyId: string) {
@@ -107,14 +118,23 @@ export function AccessControl() {
     fetchKeys();
   }, []);
 
+  const { sort, toggleSort } = useSort<KeySortColumn>(
+    { column: 'name', direction: 'asc' },
+    { created: 'desc' },
+  );
+
   const filteredKeys = useMemo(
     () =>
-      keys.filter(
-        (key) =>
-          key.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          key.accessKeyId.toLowerCase().includes(searchQuery.toLowerCase())
+      sortItems(
+        keys.filter(
+          (key) =>
+            key.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            key.accessKeyId.toLowerCase().includes(searchQuery.toLowerCase())
+        ),
+        sort,
+        keySortAccessors,
       ),
-    [keys, searchQuery]
+    [keys, searchQuery, sort]
   );
 
   const handleCreateKey = async () => {
@@ -452,10 +472,18 @@ export function AccessControl() {
                 <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="hidden sm:table-cell">Access Key ID</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden lg:table-cell">Created</TableHead>
+                    <SortableTableHead column="name" sort={sort} onSort={toggleSort}>
+                      Name
+                    </SortableTableHead>
+                    <SortableTableHead column="accessKeyId" sort={sort} onSort={toggleSort} className="hidden sm:table-cell">
+                      Access Key ID
+                    </SortableTableHead>
+                    <SortableTableHead column="status" sort={sort} onSort={toggleSort}>
+                      Status
+                    </SortableTableHead>
+                    <SortableTableHead column="created" sort={sort} onSort={toggleSort} className="hidden lg:table-cell">
+                      Created
+                    </SortableTableHead>
                     <TableHead className="hidden lg:table-cell">Permissions</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>

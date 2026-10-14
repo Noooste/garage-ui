@@ -17,6 +17,8 @@ export default defineConfig({
         'src/lib/bucket-usage.ts',
         'src/lib/preview-utils.ts',
         'src/lib/highlight.ts',
+        'src/lib/sort-utils.ts',
+        'src/hooks/useSort.ts',
         'src/hooks/useObjectPreview.ts',
         'src/components/buckets/ObjectPreview.tsx',
       ],

@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { SortState } from '@/lib/sort-utils';
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
@@ -67,6 +69,45 @@ const TableHead = React.forwardRef<
 ));
 TableHead.displayName = 'TableHead';
 
+interface SortableTableHeadProps<K extends string>
+  extends Omit<React.ThHTMLAttributes<HTMLTableCellElement>, 'onClick'> {
+  column: K;
+  sort: SortState<K>;
+  onSort: (column: K) => void;
+}
+
+function SortableTableHead<K extends string>({
+  column,
+  sort,
+  onSort,
+  className,
+  children,
+  ...props
+}: SortableTableHeadProps<K>) {
+  const active = sort.column === column;
+  const Icon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
+  return (
+    <TableHead
+      // Only the active column carries aria-sort, per the ARIA sortable-table pattern.
+      aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
+      className={className}
+      {...props}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={cn(
+          '-ml-2 inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 font-medium transition-colors hover:bg-muted hover:text-foreground',
+          active && 'text-foreground'
+        )}
+      >
+        {children}
+        <Icon className={cn('h-3.5 w-3.5 shrink-0', !active && 'opacity-40')} aria-hidden="true" />
+      </button>
+    </TableHead>
+  );
+}
+
 const TableCell = React.forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>
@@ -87,4 +128,14 @@ const TableCaption = React.forwardRef<
 ));
 TableCaption.displayName = 'TableCaption';
 
-export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption };
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  SortableTableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+};

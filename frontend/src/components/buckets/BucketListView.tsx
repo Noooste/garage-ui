@@ -1,7 +1,16 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useMemo } from 'react';
+import {
+  SortableTableHead,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +22,8 @@ import { FolderIcon, Globe, Loader2, MoreVertical, Search, Settings, Trash2 } fr
 import { formatBytes, formatCount } from '@/lib/file-utils';
 import { formatDate } from '@/lib/utils';
 import { useBucketCan } from '@/hooks/usePermissions';
+import { useSort } from '@/hooks/useSort';
+import { sortItems, type SortValue } from '@/lib/sort-utils';
 import type { Bucket } from '@/types';
 
 interface BucketListViewProps {
@@ -26,6 +37,18 @@ interface BucketListViewProps {
   onWebsiteSettings: (bucket: Bucket) => void;
 }
 
+type BucketSortColumn = 'name' | 'region' | 'objects' | 'size' | 'created';
+
+const bucketSortAccessors: Record<BucketSortColumn, (bucket: Bucket) => SortValue> = {
+  name: (bucket) => bucket.name,
+  region: (bucket) => bucket.region || 'default',
+  // Buckets whose stats could not be loaded have no count or size; leaving
+  // them undefined sorts them last instead of passing them off as empty.
+  objects: (bucket) => bucket.objectCount,
+  size: (bucket) => bucket.size,
+  created: (bucket) => new Date(bucket.creationDate),
+};
+
 export function BucketListView({
   buckets,
   searchQuery,
@@ -37,8 +60,18 @@ export function BucketListView({
   onWebsiteSettings,
 }: BucketListViewProps) {
   const canBucket = useBucketCan();
-  const filteredBuckets = buckets.filter((bucket) =>
-    bucket.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const { sort, toggleSort } = useSort<BucketSortColumn>(
+    { column: 'name', direction: 'asc' },
+    { objects: 'desc', size: 'desc', created: 'desc' },
+  );
+  const filteredBuckets = useMemo(
+    () =>
+      sortItems(
+        buckets.filter((bucket) => bucket.name.toLowerCase().includes(searchQuery.toLowerCase())),
+        sort,
+        bucketSortAccessors,
+      ),
+    [buckets, searchQuery, sort],
   );
 
   return (
@@ -59,11 +92,21 @@ export function BucketListView({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead className="hidden sm:table-cell">Region</TableHead>
-              <TableHead className="hidden md:table-cell">Objects</TableHead>
-              <TableHead>Size</TableHead>
-              <TableHead className="hidden lg:table-cell">Created</TableHead>
+              <SortableTableHead column="name" sort={sort} onSort={toggleSort}>
+                Name
+              </SortableTableHead>
+              <SortableTableHead column="region" sort={sort} onSort={toggleSort} className="hidden sm:table-cell">
+                Region
+              </SortableTableHead>
+              <SortableTableHead column="objects" sort={sort} onSort={toggleSort} className="hidden md:table-cell">
+                Objects
+              </SortableTableHead>
+              <SortableTableHead column="size" sort={sort} onSort={toggleSort}>
+                Size
+              </SortableTableHead>
+              <SortableTableHead column="created" sort={sort} onSort={toggleSort} className="hidden lg:table-cell">
+                Created
+              </SortableTableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>

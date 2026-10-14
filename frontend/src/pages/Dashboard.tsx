@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { BucketUsageChart } from '@/components/charts/BucketUsageChart';
 import { useDashboardData } from '@/hooks/useApi';
 import { formatBytes, formatCount } from '@/lib/file-utils';
+import { sortItems } from '@/lib/sort-utils';
 import type { BucketUsage, ClusterHealth } from '@/types';
 
 type StatTone = 'primary' | 'destructive' | 'neutral';
@@ -31,12 +32,24 @@ function deriveHealth(health: ClusterHealth | null): { label: HealthLabel; tone:
 export function Dashboard() {
   const { metrics: metricsQuery, buckets: bucketsQuery, health: healthQuery, isLoading } = useDashboardData();
   const metrics = metricsQuery.data;
-  const buckets = bucketsQuery.data ?? [];
+  const buckets = bucketsQuery.data;
   const clusterHealth = healthQuery.data ?? null;
   const health = deriveHealth(clusterHealth);
-  const usage = useMemo(
-    () => [...(metrics?.usageByBucket ?? [])].sort((a, b) => b.size - a.size),
+  // Largest buckets first, so the breakdown reads as a ranking of storage use.
+  const usageByBucket = useMemo(
+    () =>
+      sortItems(metrics?.usageByBucket ?? [], { column: 'size', direction: 'desc' }, {
+        size: (bucket) => bucket.size,
+      }),
     [metrics?.usageByBucket],
+  );
+  // Garage lists buckets in ID order, so pick the newest ones explicitly.
+  const recentBuckets = useMemo(
+    () =>
+      sortItems(buckets ?? [], { column: 'created', direction: 'desc' }, {
+        created: (bucket) => new Date(bucket.creationDate),
+      }).slice(0, 5),
+    [buckets],
   );
 
   return (
@@ -98,16 +111,16 @@ export function Dashboard() {
             {/* Storage: where the space goes */}
             <div className="space-y-4">
               <Card title="Storage usage by bucket" description="Distribution of storage across buckets">
-                {usage.length > 0 ? (
-                  <BucketUsageChart data={usage} />
+                {usageByBucket.length > 0 ? (
+                  <BucketUsageChart data={usageByBucket} />
                 ) : (
                   <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">No data available</div>
                 )}
               </Card>
 
               <Card title="Breakdown" description="Size and object count per bucket, largest first">
-                {usage.length > 0 ? (
-                  <Breakdown usage={usage} />
+                {usageByBucket.length > 0 ? (
+                  <Breakdown usage={usageByBucket} />
                 ) : (
                   <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">No buckets available</div>
                 )}
@@ -150,9 +163,9 @@ export function Dashboard() {
               <Card
                 title="Recent buckets"
                 description="Your most recently created buckets"
-                action={buckets.length > 0 && <CardLink to="/buckets">View all</CardLink>}
+                action={recentBuckets.length > 0 && <CardLink to="/buckets">View all</CardLink>}
               >
-                {buckets.length === 0 ? (
+                {recentBuckets.length === 0 ? (
                   <EmptyState
                     icon={<Database />}
                     title="No buckets yet"
@@ -161,7 +174,7 @@ export function Dashboard() {
                   />
                 ) : (
                   <ul className="-my-2 divide-y divide-[var(--border)]">
-                    {buckets.slice(0, 5).map((bucket) => (
+                    {recentBuckets.map((bucket) => (
                       <li key={bucket.name}>
                         <Link
                           to={`/buckets/${bucket.name}/objects`}

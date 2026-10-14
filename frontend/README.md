@@ -20,7 +20,7 @@ Modern React frontend for Garage S3-compatible object storage management.
 - **UI Components**: shadcn/ui (built on Radix UI primitives)
 - **Styling**: Tailwind CSS v4
 - **Forms**: React Hook Form + Zod
-- **Tables**: TanStack Table
+- **Tables**: shadcn/ui table primitives with built-in column sorting
 - **File Upload**: React Dropzone
 - **Icons**: Lucide React
 
