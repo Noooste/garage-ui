@@ -165,6 +165,13 @@ func TestLoadOrCreateKeyFile_GeneratesOnceThenReuses(t *testing.T) {
 	}
 }
 
+func TestLoadOrCreateKeyFile_UnreadablePathFails(t *testing.T) {
+	// A directory exists but cannot be read as a key, so nothing is generated.
+	if _, err := loadOrCreateKeyFile(t.TempDir()); err == nil {
+		t.Fatal("expected an error for a directory path")
+	}
+}
+
 func TestNewJWTServiceWithKey_EmptyStringAutoGenerates(t *testing.T) {
 	svc, err := NewJWTServiceWithKey("")
 	if err != nil {
