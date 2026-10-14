@@ -126,11 +126,7 @@ export function Dashboard() {
           {/* Charts */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Card title="Storage usage by bucket" description="Distribution of storage across buckets">
-              {usageByBucket.length > 0 ? (
-                <BucketUsageChart data={usageByBucket} />
-              ) : (
-                <div className="py-8 text-center text-[13.5px] text-[var(--muted-foreground)]">No data available</div>
-              )}
+              <BucketUsageChart data={usageByBucket} />
             </Card>
 
             <Card title="Breakdown" description="Detailed breakdown of storage across all buckets">

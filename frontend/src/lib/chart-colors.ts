@@ -18,7 +18,7 @@ export const grafanaColors = {
     green: '#73bf69',
     red: '#f2495c',
     purple: '#b581d8',
-    brown: '#c4a2e0',
+    brown: '#c49c94',
     pink: '#ff9d96',
     gray: '#9ba3af',
     olive: '#fac858',
@@ -45,7 +45,7 @@ export const chartColorPalette = {
     '#73bf69', // Green
     '#f2495c', // Red
     '#b581d8', // Purple
-    '#c4a2e0', // Pink
+    '#c49c94', // Brown
     '#ff9d96', // Light Pink
     '#9ba3af', // Gray
     '#fac858', // Yellow
@@ -55,6 +55,17 @@ export const chartColorPalette = {
 
 export const getChartColors = (isDark: boolean = false) => {
   return isDark ? chartColorPalette.dark : chartColorPalette.light;
+};
+
+// Gray stands for an aggregated "Other" series, so it is left out of the
+// colors handed to individual series and never shared with one.
+export const getOtherColor = (isDark: boolean = false) => {
+  return isDark ? grafanaColors.dark.gray : grafanaColors.light.gray;
+};
+
+export const getSeriesColors = (isDark: boolean = false) => {
+  const other = getOtherColor(isDark);
+  return getChartColors(isDark).filter((color) => color !== other);
 };
 
 export const getTextColor = (isDark: boolean = false) => {
