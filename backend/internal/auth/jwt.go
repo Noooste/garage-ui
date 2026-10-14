@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -91,7 +90,8 @@ func NewJWTServiceWithKey(privateKeyPEM string) (*JWTService, error) {
 }
 
 // loadOrCreateKeyFile returns the PEM key stored at path. On first use it
-// generates a key and saves it there, so sessions survive restarts.
+// generates a key and saves it there, so sessions survive restarts. The
+// parent directory must already exist.
 func loadOrCreateKeyFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err == nil {
@@ -101,18 +101,11 @@ func loadOrCreateKeyFile(path string) (string, error) {
 		return "", err
 	}
 
-	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return "", err
-	}
-	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	if err != nil {
-		return "", err
-	}
+	seed := make([]byte, ed25519.SeedSize)
+	rand.Read(seed) // never fails since Go 1.24
+	// Marshalling an Ed25519 key cannot fail.
+	der, _ := x509.MarshalPKCS8PrivateKey(ed25519.NewKeyFromSeed(seed))
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return "", err
-	}
 	if err := os.WriteFile(path, keyPEM, 0o600); err != nil {
 		return "", err
 	}

@@ -147,7 +147,7 @@ func TestNewJWTServiceWithKey_RejectsPublishedComposeKey(t *testing.T) {
 }
 
 func TestLoadOrCreateKeyFile_GeneratesOnceThenReuses(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "data", "jwt-key.pem")
+	path := filepath.Join(t.TempDir(), "jwt-key.pem")
 
 	first, err := loadOrCreateKeyFile(path)
 	if err != nil {
@@ -162,6 +162,13 @@ func TestLoadOrCreateKeyFile_GeneratesOnceThenReuses(t *testing.T) {
 	}
 	if first != second {
 		t.Fatal("second call generated a new key instead of reusing the saved one")
+	}
+}
+
+func TestLoadOrCreateKeyFile_MissingParentDirFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "jwt-key.pem")
+	if _, err := loadOrCreateKeyFile(path); err == nil {
+		t.Fatal("expected an error when the parent directory does not exist")
 	}
 }
 

@@ -59,7 +59,8 @@ auth:
 
   # When jwt_private_key is empty, generate a key on first start, save it to this
   # file and reuse it afterwards, so tokens survive restarts. Empty keeps the
-  # per-start key. The Docker image sets /app/data/jwt-key.pem.
+  # per-start key. The directory must exist. The Docker image sets
+  # /app/data/jwt-key.pem.
   # Env: GARAGE_UI_AUTH_JWT_PRIVATE_KEY_PATH
   jwt_private_key_path: ""
 
