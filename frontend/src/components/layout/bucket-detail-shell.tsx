@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { copyText } from '@/lib/clipboard';
+import { formatCount } from '@/lib/file-utils';
 import { useBuckets } from '@/hooks/useApi';
 import { useBucketCan } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
@@ -60,7 +61,11 @@ export function BucketDetailShell() {
               <p className="mt-1 truncate font-mono text-[13.5px] text-[var(--muted-foreground)]">{s3Url}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="success">Active</Badge>
-                {bucket?.objectCount != null && <Badge>{bucket.objectCount.toLocaleString()} objects</Badge>}
+                {bucket?.objectCount != null && (
+                  <Badge title={bucket.objectCount.toLocaleString()}>
+                    {formatCount(bucket.objectCount)} {bucket.objectCount === 1 ? 'object' : 'objects'}
+                  </Badge>
+                )}
                 {bucket?.size != null && <Badge>{formatBytes(bucket.size)}</Badge>}
               </div>
             </div>
