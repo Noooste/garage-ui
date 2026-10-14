@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.14.0](https://github.com/Noooste/garage-ui/compare/v0.13.0...v0.14.0) (2026-10-14)
+
+
+### Features
+
+* **frontend:** sortable table columns with sensible default order ([#133](https://github.com/Noooste/garage-ui/issues/133)) ([d7cc6cf](https://github.com/Noooste/garage-ui/commit/d7cc6cff6dbf2bda76f7b4c7595bee89be268b47))
+
+
+### Bug Fixes
+
+* **backend,helm:** stop shipping a shared JWT signing key in docker-compose ([#135](https://github.com/Noooste/garage-ui/issues/135)) ([a2b32a1](https://github.com/Noooste/garage-ui/commit/a2b32a13cf704c804fdff1ec0fb9beb0bf2cdc1e))
+* **frontend:** improve dashboard layout with ([#139](https://github.com/Noooste/garage-ui/issues/139)) ([dd67006](https://github.com/Noooste/garage-ui/commit/dd67006523ecceba79467f296019db25bd6274c3))
+* **routes:** handle unreadable index.html for SPA fallback to prevent 404 errors ([7da65bc](https://github.com/Noooste/garage-ui/commit/7da65bc105164c1681e6f7485f2a80acdbb3f266))
+
 ## [0.13.0](https://github.com/Noooste/garage-ui/compare/v0.12.1...v0.13.0) (2026-09-20)
 
 
