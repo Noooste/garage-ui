@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -142,6 +143,25 @@ func TestNewJWTServiceWithKey_RejectsPublishedComposeKey(t *testing.T) {
 	}
 	if _, err := svc.ValidateToken(forged); err == nil {
 		t.Fatal("token signed with the published compose key was accepted")
+	}
+}
+
+func TestLoadOrCreateKeyFile_GeneratesOnceThenReuses(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "data", "jwt-key.pem")
+
+	first, err := loadOrCreateKeyFile(path)
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if _, err := parseEd25519PrivateKeyFromPEM(first); err != nil {
+		t.Fatalf("generated key does not parse: %v", err)
+	}
+	second, err := loadOrCreateKeyFile(path)
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if first != second {
+		t.Fatal("second call generated a new key instead of reusing the saved one")
 	}
 }
 

@@ -43,7 +43,15 @@ type UserInfo struct {
 
 // NewAuthService creates a new authentication service
 func NewAuthService(authCfg *config.AuthConfig, serverCfg *config.ServerConfig) (*Service, error) {
-	jwtService, err := NewJWTServiceWithKey(authCfg.JWTPrivKey)
+	keyPEM := authCfg.JWTPrivKey
+	if keyPEM == "" && authCfg.JWTPrivKeyPath != "" {
+		var err error
+		if keyPEM, err = loadOrCreateKeyFile(authCfg.JWTPrivKeyPath); err != nil {
+			logger.Warn().Err(err).Str("path", authCfg.JWTPrivKeyPath).Msg("Cannot load or save the JWT signing key, using a random key; sessions will not survive restarts")
+		}
+	}
+
+	jwtService, err := NewJWTServiceWithKey(keyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize JWT service: %w", err)
 	}

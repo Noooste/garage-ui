@@ -6,7 +6,11 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -84,6 +88,36 @@ func NewJWTServiceWithKey(privateKeyPEM string) (*JWTService, error) {
 			states: make(map[string]StateData),
 		},
 	}, nil
+}
+
+// loadOrCreateKeyFile returns the PEM key stored at path. On first use it
+// generates a key and saves it there, so sessions survive restarts.
+func loadOrCreateKeyFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return string(data), nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", err
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return "", err
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, keyPEM, 0o600); err != nil {
+		return "", err
+	}
+	logger.Info().Str("path", path).Msg("Generated a new JWT signing key")
+	return string(keyPEM), nil
 }
 
 func parseEd25519PrivateKeyFromPEM(privateKeyPEM string) (ed25519.PrivateKey, error) {
