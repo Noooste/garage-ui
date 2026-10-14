@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"Noooste/garage-ui/pkg/logger"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -40,6 +42,10 @@ type SessionClaims struct {
 	jwt.RegisteredClaims
 }
 
+// publishedComposeKey shipped in docker-compose.yml up to 0.13.0 (issue #132).
+// It is public, so it is refused even when an operator configures it.
+var publishedComposeKey, _ = parseEd25519PrivateKeyFromPEM("-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIH0ZHqIV7MEyVsxNYc5TA/a0qaBxgq3ntlFS3w1F03MS\n-----END PRIVATE KEY-----\n")
+
 func NewJWTService() (*JWTService, error) {
 	return NewJWTServiceWithKey("")
 }
@@ -55,6 +61,13 @@ func NewJWTServiceWithKey(privateKeyPEM string) (*JWTService, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse Ed25519 private key: %w", err)
 		}
+		if privateKey.Equal(publishedComposeKey) {
+			logger.Warn().Msg("GARAGE_UI_AUTH_JWT_PRIVATE_KEY is the public example key from docker-compose.yml, anyone could forge sessions with it. Ignoring it and using a random key; sessions will not survive restarts until you set your own key")
+			privateKey = nil
+		}
+	}
+
+	if privateKey != nil {
 		publicKey = privateKey.Public().(ed25519.PublicKey)
 	} else {
 		// Generate a new Ed25519 key pair if no key is provided

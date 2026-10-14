@@ -118,6 +118,33 @@ func TestNewJWTService_AutoGeneratesKeyPair(t *testing.T) {
 	}
 }
 
+// The key that shipped in docker-compose.yml (issue #132) is public, so a
+// token an attacker signs with it must not validate.
+func TestNewJWTServiceWithKey_RejectsPublishedComposeKey(t *testing.T) {
+	const published = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIH0ZHqIV7MEyVsxNYc5TA/a0qaBxgq3ntlFS3w1F03MS\n-----END PRIVATE KEY-----\n"
+	svc, err := NewJWTServiceWithKey(published)
+	if err != nil {
+		t.Fatalf("NewJWTServiceWithKey: %v", err)
+	}
+	attackerKey, err := parseEd25519PrivateKeyFromPEM(published)
+	if err != nil {
+		t.Fatalf("parse published key: %v", err)
+	}
+	forged, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, SessionClaims{
+		Username:   "forged-admin",
+		AuthMethod: "admin",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}).SignedString(attackerKey)
+	if err != nil {
+		t.Fatalf("sign forged token: %v", err)
+	}
+	if _, err := svc.ValidateToken(forged); err == nil {
+		t.Fatal("token signed with the published compose key was accepted")
+	}
+}
+
 func TestNewJWTServiceWithKey_EmptyStringAutoGenerates(t *testing.T) {
 	svc, err := NewJWTServiceWithKey("")
 	if err != nil {
