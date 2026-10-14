@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -115,6 +116,66 @@ func TestNewJWTService_AutoGeneratesKeyPair(t *testing.T) {
 	}
 	if svc.stateStore == nil || svc.stateStore.states == nil {
 		t.Error("stateStore not initialized")
+	}
+}
+
+// The key that shipped in docker-compose.yml (issue #132) is public, so a
+// token an attacker signs with it must not validate.
+func TestNewJWTServiceWithKey_RejectsPublishedComposeKey(t *testing.T) {
+	const published = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIH0ZHqIV7MEyVsxNYc5TA/a0qaBxgq3ntlFS3w1F03MS\n-----END PRIVATE KEY-----\n"
+	svc, err := NewJWTServiceWithKey(published)
+	if err != nil {
+		t.Fatalf("NewJWTServiceWithKey: %v", err)
+	}
+	attackerKey, err := parseEd25519PrivateKeyFromPEM(published)
+	if err != nil {
+		t.Fatalf("parse published key: %v", err)
+	}
+	forged, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, SessionClaims{
+		Username:   "forged-admin",
+		AuthMethod: "admin",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}).SignedString(attackerKey)
+	if err != nil {
+		t.Fatalf("sign forged token: %v", err)
+	}
+	if _, err := svc.ValidateToken(forged); err == nil {
+		t.Fatal("token signed with the published compose key was accepted")
+	}
+}
+
+func TestLoadOrCreateKeyFile_GeneratesOnceThenReuses(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "jwt-key.pem")
+
+	first, err := loadOrCreateKeyFile(path)
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if _, err := parseEd25519PrivateKeyFromPEM(first); err != nil {
+		t.Fatalf("generated key does not parse: %v", err)
+	}
+	second, err := loadOrCreateKeyFile(path)
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if first != second {
+		t.Fatal("second call generated a new key instead of reusing the saved one")
+	}
+}
+
+func TestLoadOrCreateKeyFile_MissingParentDirFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "jwt-key.pem")
+	if _, err := loadOrCreateKeyFile(path); err == nil {
+		t.Fatal("expected an error when the parent directory does not exist")
+	}
+}
+
+func TestLoadOrCreateKeyFile_UnreadablePathFails(t *testing.T) {
+	// A directory exists but cannot be read as a key, so nothing is generated.
+	if _, err := loadOrCreateKeyFile(t.TempDir()); err == nil {
+		t.Fatal("expected an error for a directory path")
 	}
 }
 

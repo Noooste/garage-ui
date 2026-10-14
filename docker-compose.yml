@@ -20,6 +20,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./config.yaml:/app/config.yaml
+      # Holds the JWT signing key generated on first start
+      - garage-ui-data:/app/data
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -34,10 +36,9 @@ services:
       GARAGE_UI_SERVER_PORT: "8080"
       GARAGE_UI_SERVER_ENVIRONMENT: "production"
 
-      # JWT Configuration
-      # IMPORTANT: Replace this with your own Ed25519 private key in production!
-      # Generate with: openssl genpkey -algorithm ED25519
-      GARAGE_UI_AUTH_JWT_PRIVATE_KEY: |
-        -----BEGIN PRIVATE KEY-----
-        MC4CAQAwBQYDK2VwBCIEIH0ZHqIV7MEyVsxNYc5TA/a0qaBxgq3ntlFS3w1F03MS
-        -----END PRIVATE KEY-----
+      # JWT signing key: generated on first start and saved in the
+      # garage-ui-data volume. To use your own instead, mount it and set
+      # GARAGE_UI_AUTH_JWT_PRIVATE_KEY_FILE: /path/to/jwt-key.pem
+
+volumes:
+  garage-ui-data:

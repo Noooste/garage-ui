@@ -46,10 +46,15 @@ RUN apk update && apk upgrade --no-cache && \
     apk --no-cache add ca-certificates wget
 
 RUN addgroup -g 1000 garageui && \
-    adduser -D -u 1000 -G garageui garageui
+    adduser -D -u 1000 -G garageui garageui && \
+    mkdir -p /app/data && chown garageui:garageui /app/data
 
 COPY --from=backend-builder --chown=garageui:garageui /app/garage-ui .
 COPY --from=frontend-builder --chown=garageui:garageui /app/frontend/dist ./frontend/dist
+
+# Without a configured key, one is generated here on first start and reused.
+# Mount a volume on /app/data to keep it when the container is recreated.
+ENV GARAGE_UI_AUTH_JWT_PRIVATE_KEY_PATH=/app/data/jwt-key.pem
 
 USER garageui
 

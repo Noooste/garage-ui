@@ -6,9 +6,14 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"sync"
 	"time"
+
+	"Noooste/garage-ui/pkg/logger"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -40,6 +45,10 @@ type SessionClaims struct {
 	jwt.RegisteredClaims
 }
 
+// publishedComposeKey shipped in docker-compose.yml up to 0.13.0 (issue #132).
+// It is public, so it is refused even when an operator configures it.
+var publishedComposeKey, _ = parseEd25519PrivateKeyFromPEM("-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIH0ZHqIV7MEyVsxNYc5TA/a0qaBxgq3ntlFS3w1F03MS\n-----END PRIVATE KEY-----\n")
+
 func NewJWTService() (*JWTService, error) {
 	return NewJWTServiceWithKey("")
 }
@@ -55,6 +64,13 @@ func NewJWTServiceWithKey(privateKeyPEM string) (*JWTService, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse Ed25519 private key: %w", err)
 		}
+		if privateKey.Equal(publishedComposeKey) {
+			logger.Warn().Msg("GARAGE_UI_AUTH_JWT_PRIVATE_KEY is the public example key from docker-compose.yml, anyone could forge sessions with it. Ignoring it and using a random key; sessions will not survive restarts until you set your own key")
+			privateKey = nil
+		}
+	}
+
+	if privateKey != nil {
 		publicKey = privateKey.Public().(ed25519.PublicKey)
 	} else {
 		// Generate a new Ed25519 key pair if no key is provided
@@ -71,6 +87,30 @@ func NewJWTServiceWithKey(privateKeyPEM string) (*JWTService, error) {
 			states: make(map[string]StateData),
 		},
 	}, nil
+}
+
+// loadOrCreateKeyFile returns the PEM key stored at path. On first use it
+// generates a key and saves it there, so sessions survive restarts. The
+// parent directory must already exist.
+func loadOrCreateKeyFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return string(data), nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+
+	seed := make([]byte, ed25519.SeedSize)
+	rand.Read(seed) // never fails since Go 1.24
+	// Marshalling an Ed25519 key cannot fail.
+	der, _ := x509.MarshalPKCS8PrivateKey(ed25519.NewKeyFromSeed(seed))
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	if err := os.WriteFile(path, keyPEM, 0o600); err != nil {
+		return "", err
+	}
+	logger.Info().Str("path", path).Msg("Generated a new JWT signing key")
+	return string(keyPEM), nil
 }
 
 func parseEd25519PrivateKeyFromPEM(privateKeyPEM string) (ed25519.PrivateKey, error) {

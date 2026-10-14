@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -217,6 +219,37 @@ func TestNewAuthService_OIDCDisabled_DoesNotInitProvider(t *testing.T) {
 	}
 	if svc.jwtService == nil {
 		t.Error("jwtService must always be initialized")
+	}
+}
+
+func TestNewAuthService_JWTKeyPath_SavesAndReusesKey(t *testing.T) {
+	cfg := &config.AuthConfig{JWTPrivKeyPath: filepath.Join(t.TempDir(), "jwt-key.pem")}
+
+	first, err := NewAuthService(cfg, &config.ServerConfig{})
+	if err != nil {
+		t.Fatalf("first NewAuthService: %v", err)
+	}
+	second, err := NewAuthService(cfg, &config.ServerConfig{})
+	if err != nil {
+		t.Fatalf("second NewAuthService: %v", err)
+	}
+	if !first.jwtService.publicKey.Equal(second.jwtService.publicKey) {
+		t.Error("second start used a different key instead of the saved one")
+	}
+}
+
+func TestNewAuthService_JWTKeyPathUnusable_FallsBackToRandomKey(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	svc, err := NewAuthService(&config.AuthConfig{JWTPrivKeyPath: filepath.Join(blocker, "jwt-key.pem")}, &config.ServerConfig{})
+	if err != nil {
+		t.Fatalf("NewAuthService should fall back, got: %v", err)
+	}
+	if svc.jwtService.privateKey == nil {
+		t.Error("no signing key after fallback")
 	}
 }
 

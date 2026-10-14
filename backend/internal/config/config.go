@@ -50,11 +50,12 @@ type GarageConfig struct {
 
 // AuthConfig contains authentication configuration
 type AuthConfig struct {
-	Admin         AdminAuthConfig `mapstructure:"admin"`
-	OIDC          OIDCConfig      `mapstructure:"oidc"`
-	Token         TokenAuthConfig `mapstructure:"token"`
-	JWTPrivKey    string          `mapstructure:"jwt_private_key"` // Ed25519 private key in PEM format for JWT signing (64 bytes)
-	MetricsPublic bool            `mapstructure:"metrics_public"`  // Expose Prometheus metrics at top-level /metrics without auth
+	Admin          AdminAuthConfig `mapstructure:"admin"`
+	OIDC           OIDCConfig      `mapstructure:"oidc"`
+	Token          TokenAuthConfig `mapstructure:"token"`
+	JWTPrivKey     string          `mapstructure:"jwt_private_key"`      // Ed25519 private key in PEM format for JWT signing (64 bytes)
+	JWTPrivKeyPath string          `mapstructure:"jwt_private_key_path"` // Where to save a generated key when JWTPrivKey is empty; empty means a new key per start
+	MetricsPublic  bool            `mapstructure:"metrics_public"`       // Expose Prometheus metrics at top-level /metrics without auth
 }
 
 // AdminAuthConfig contains admin authentication settings
@@ -311,6 +312,7 @@ func bindEnvVars() {
 	viper.BindEnv("auth.admin.username", "GARAGE_UI_AUTH_ADMIN_USERNAME")
 	viper.BindEnv("auth.admin.password", "GARAGE_UI_AUTH_ADMIN_PASSWORD")
 	viper.BindEnv("auth.jwt_private_key", "GARAGE_UI_AUTH_JWT_PRIVATE_KEY")
+	viper.BindEnv("auth.jwt_private_key_path", "GARAGE_UI_AUTH_JWT_PRIVATE_KEY_PATH")
 	viper.BindEnv("auth.metrics_public", "GARAGE_UI_AUTH_METRICS_PUBLIC")
 
 	// Token auth config
