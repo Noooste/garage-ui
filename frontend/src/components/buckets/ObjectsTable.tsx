@@ -110,11 +110,18 @@ export function ObjectsTable({
     // updates once typing pauses (matches the debounced server request).
     const query = filterQuery.toLowerCase();
     const filtered = objects.filter((obj) => obj.key.toLowerCase().includes(query));
-    const sorted = sortItems(filtered, sort, {
-      name: (obj) => obj.key.replace(currentPath, '').replace(/\/$/, ''),
-      size: (obj) => obj.size,
-      modified: (obj) => (obj.lastModified ? new Date(obj.lastModified) : undefined),
-    });
+    // Binary name order matches the byte order Garage pages keys in, so the
+    // default name sort keeps every server page in line with its neighbours.
+    const sorted = sortItems(
+      filtered,
+      sort,
+      {
+        name: (obj) => obj.key.replace(currentPath, '').replace(/\/$/, ''),
+        size: (obj) => obj.size,
+        modified: (obj) => (obj.lastModified ? new Date(obj.lastModified) : undefined),
+      },
+      { stringOrder: 'binary' },
+    );
     // Folders always stay above files, whatever the sort column.
     return [...sorted.filter((obj) => obj.isFolder), ...sorted.filter((obj) => !obj.isFolder)];
   }, [objects, filterQuery, sort, currentPath]);

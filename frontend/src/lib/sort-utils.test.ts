@@ -32,6 +32,37 @@ describe('sortItems', () => {
     ]);
   });
 
+  it('sorts strings by code point in binary order, matching S3 key order', () => {
+    // S3 lists keys by UTF-8 bytes: "logs-10" before "logs-2", uppercase first.
+    const rows = [{ name: 'logs-2' }, { name: 'b' }, { name: 'logs-10' }, { name: 'Z' }, { name: 'logs-1' }];
+    expect(names(sortItems(rows, { column: 'name', direction: 'asc' }, accessors, { stringOrder: 'binary' }))).toEqual([
+      'Z',
+      'b',
+      'logs-1',
+      'logs-10',
+      'logs-2',
+    ]);
+    expect(names(sortItems(rows, { column: 'name', direction: 'desc' }, accessors, { stringOrder: 'binary' }))).toEqual([
+      'logs-2',
+      'logs-10',
+      'logs-1',
+      'b',
+      'Z',
+    ]);
+  });
+
+  it('orders characters beyond the BMP after high BMP characters in binary order', () => {
+    // UTF-16 code units would put the emoji (surrogate 0xD83D) first; UTF-8
+    // bytes, and so S3, put U+FF61 first.
+    const rows = [{ name: 'a\u{1F600}y' }, { name: 'a\uFF61' }, { name: 'a' }, { name: 'a\u{1F600}x' }];
+    expect(names(sortItems(rows, { column: 'name', direction: 'asc' }, accessors, { stringOrder: 'binary' }))).toEqual([
+      'a',
+      'a\uFF61',
+      'a\u{1F600}x',
+      'a\u{1F600}y',
+    ]);
+  });
+
   it('sorts numbers in both directions', () => {
     const rows = [{ name: 'a', size: 5 }, { name: 'b', size: 50 }, { name: 'c', size: 0 }];
     expect(names(sortItems(rows, { column: 'size', direction: 'asc' }, accessors))).toEqual(['c', 'a', 'b']);

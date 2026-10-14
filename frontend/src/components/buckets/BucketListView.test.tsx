@@ -63,6 +63,26 @@ describe('BucketListView sorting', () => {
     expect(rowNames()).toEqual(['logs', 'media', 'Archive']);
   });
 
+  it('sorts buckets without stats last in both directions', () => {
+    render(
+      <BucketListView
+        buckets={[...buckets, { name: 'no-stats', creationDate: '2025-01-01T00:00:00Z', websiteAccess: false }]}
+        searchQuery=""
+        onSearchChange={() => {}}
+        onViewBucket={() => {}}
+        onOpenSettings={() => {}}
+        onDeleteBucket={() => {}}
+        onWebsiteSettings={() => {}}
+      />,
+    );
+    fireEvent.click(within(header('Size')).getByRole('button'));
+    expect(rowNames()).toEqual(['Archive', 'media', 'logs', 'no-stats']);
+    fireEvent.click(within(header('Size')).getByRole('button'));
+    expect(rowNames()).toEqual(['logs', 'media', 'Archive', 'no-stats']);
+    fireEvent.click(within(header('Objects')).getByRole('button'));
+    expect(rowNames()).toEqual(['logs', 'media', 'Archive', 'no-stats']);
+  });
+
   it('keeps the sort order while filtering', () => {
     renderList('a');
     fireEvent.click(within(header('Name')).getByRole('button'));

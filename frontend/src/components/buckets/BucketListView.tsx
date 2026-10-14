@@ -42,8 +42,10 @@ type BucketSortColumn = 'name' | 'region' | 'objects' | 'size' | 'created';
 const bucketSortAccessors: Record<BucketSortColumn, (bucket: Bucket) => SortValue> = {
   name: (bucket) => bucket.name,
   region: (bucket) => bucket.region || 'default',
-  objects: (bucket) => bucket.objectCount ?? 0,
-  size: (bucket) => bucket.size ?? 0,
+  // Buckets whose stats could not be loaded have no count or size; leaving
+  // them undefined sorts them last instead of passing them off as empty.
+  objects: (bucket) => bucket.objectCount,
+  size: (bucket) => bucket.size,
   created: (bucket) => new Date(bucket.creationDate),
 };
 
