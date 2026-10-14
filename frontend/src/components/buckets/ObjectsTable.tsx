@@ -3,7 +3,7 @@ import {useNavigate} from 'react-router';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
+import {SortableTableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table';
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip';
 import {
   DropdownMenu,
@@ -15,6 +15,8 @@ import {
 import {ChevronLeft, ChevronRight, Download, Eye, FileIcon, FolderIcon, Loader2, MoreVertical, Trash2} from 'lucide-react';
 import {Select, SelectOption} from '@/components/ui/select';
 import {downloadObject, formatBytes, formatRelativeTime} from '@/lib/file-utils';
+import {sortItems} from '@/lib/sort-utils';
+import {useSort} from '@/hooks/useSort';
 import type {S3Object} from '@/types';
 
 interface ObjectsTableProps {
@@ -48,7 +50,6 @@ interface ObjectsTableProps {
 }
 
 type SortColumn = 'name' | 'size' | 'modified';
-type SortDirection = 'asc' | 'desc';
 
 export function ObjectsTable({
   bucketName,
@@ -77,8 +78,10 @@ export function ObjectsTable({
 }: ObjectsTableProps) {
   const navigate = useNavigate();
   const canDelete = Boolean(onDeleteObject);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const { sort, toggleSort } = useSort<SortColumn>(
+    { column: 'name', direction: 'asc' },
+    { size: 'desc', modified: 'desc' },
+  );
   // Store tokens for each page: [undefined (page 1), token1 (page 2), token2 (page 3), ...]
   const [pageTokens, setPageTokens] = useState<(string | undefined)[]>([undefined]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
@@ -107,33 +110,21 @@ export function ObjectsTable({
     // updates once typing pauses (matches the debounced server request).
     const query = filterQuery.toLowerCase();
     const filtered = objects.filter((obj) => obj.key.toLowerCase().includes(query));
-    return [...filtered].sort((a, b) => {
-      const aIsFolder = a.isFolder ? 1 : 0;
-      const bIsFolder = b.isFolder ? 1 : 0;
-      if (aIsFolder !== bIsFolder) return bIsFolder - aIsFolder;
-
-      let compareValue = 0;
-      switch (sortColumn) {
-        case 'name': {
-          const aName = a.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
-          const bName = b.key.replace(currentPath, '').replace(/\/$/, '').toLowerCase();
-          compareValue = aName.localeCompare(bName);
-          break;
-        }
-        case 'size':
-          compareValue = a.size - b.size;
-          break;
-        case 'modified': {
-          const aDate = new Date(a.lastModified).getTime();
-          const bDate = new Date(b.lastModified).getTime();
-          compareValue = aDate - bDate;
-          break;
-        }
-      }
-
-      return sortDirection === 'asc' ? compareValue : -compareValue;
-    });
-  }, [objects, filterQuery, sortColumn, sortDirection, currentPath]);
+    // Binary name order matches the byte order Garage pages keys in, so the
+    // default name sort keeps every server page in line with its neighbours.
+    const sorted = sortItems(
+      filtered,
+      sort,
+      {
+        name: (obj) => obj.key.replace(currentPath, '').replace(/\/$/, ''),
+        size: (obj) => obj.size,
+        modified: (obj) => (obj.lastModified ? new Date(obj.lastModified) : undefined),
+      },
+      { stringOrder: 'binary' },
+    );
+    // Folders always stay above files, whatever the sort column.
+    return [...sorted.filter((obj) => obj.isFolder), ...sorted.filter((obj) => !obj.isFolder)];
+  }, [objects, filterQuery, sort, currentPath]);
 
   // Reset pagination on path navigation or when a search begins/ends. Search
   // results are a single flat list, so page-token state must not leak across
@@ -202,19 +193,23 @@ export function ObjectsTable({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSort = (column: SortColumn) => {
+    toggleSort(column);
+    // A client-paginated list is re-sorted as a whole, so start again at its
+    // first page. Server pages only sort their own rows, so the page stays.
+    if (clientPaginated) setCurrentPageIndex(0);
+  };
+
+  // Browsing is server-paginated, so a column sort can only reorder the rows
+  // of the page on screen. Say so once there is more than one page.
+  const pageInfo = isDeepSearching
+    ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
+    : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}${hasPrevious || hasNext ? ' • sorted within this page' : ''}`;
+
   const handleItemsPerPageChange = (value: string) => {
     onItemsPerPageChange(Number(value));
     setPageTokens([undefined]); // Reset to first page
     setCurrentPageIndex(0);
-  };
-
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
   };
 
   return (
@@ -247,26 +242,17 @@ export function ObjectsTable({
                 />
               </TableHead>
             )}
-          <TableHead
-            className="cursor-pointer hover:bg-muted/50"
-            onClick={() => handleSort('name')}
-          >
-            Objects {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
-          </TableHead>
+          <SortableTableHead column="name" sort={sort} onSort={handleSort}>
+            Objects
+          </SortableTableHead>
           <TableHead className="hidden lg:table-cell">Type</TableHead>
           <TableHead className="hidden lg:table-cell">Storage Class</TableHead>
-          <TableHead
-            className="hidden sm:table-cell cursor-pointer hover:bg-muted/50"
-            onClick={() => handleSort('size')}
-          >
-            Size {sortColumn === 'size' && (sortDirection === 'asc' ? '↑' : '↓')}
-          </TableHead>
-          <TableHead
-            className="hidden sm:table-cell cursor-pointer hover:bg-muted/50"
-            onClick={() => handleSort('modified')}
-          >
-            Modified {sortColumn === 'modified' && (sortDirection === 'asc' ? '↑' : '↓')}
-          </TableHead>
+          <SortableTableHead column="size" sort={sort} onSort={handleSort} className="hidden sm:table-cell">
+            Size
+          </SortableTableHead>
+          <SortableTableHead column="modified" sort={sort} onSort={handleSort} className="hidden sm:table-cell">
+            Modified
+          </SortableTableHead>
           <TableHead className="w-[50px]"></TableHead>
         </TableRow>
       </TableHeader>
@@ -482,16 +468,10 @@ export function ObjectsTable({
         {/* Pagination info and controls */}
         <div className="flex w-full flex-row items-center justify-center gap-2 sm:w-auto sm:gap-4">
           <span
-            title={
-              isDeepSearching
-                ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
-                : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`
-            }
+            title={pageInfo}
             className="min-w-0 truncate whitespace-nowrap text-left text-sm text-muted-foreground"
           >
-            {isDeepSearching
-              ? `Page ${pageIndex + 1} of ${totalPages} • ${filteredObjects.length} match${filteredObjects.length !== 1 ? 'es' : ''}${isTruncated ? ' (capped, refine to narrow)' : ''}`
-              : `Page ${pageIndex + 1} • Showing ${pageObjects.length} item${pageObjects.length !== 1 ? 's' : ''}`}
+            {pageInfo}
           </span>
 
           <div className="flex shrink-0 items-center justify-center gap-2">
