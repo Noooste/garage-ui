@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { FolderIcon, Globe, Loader2, MoreVertical, Search, Settings, Trash2 } from 'lucide-react';
-import { formatBytes } from '@/lib/file-utils';
+import { formatBytes, formatCount } from '@/lib/file-utils';
 import { formatDate } from '@/lib/utils';
 import { useBucketCan } from '@/hooks/usePermissions';
 import { useSort } from '@/hooks/useSort';
@@ -145,7 +145,9 @@ export function BucketListView({
                   <TableCell className="hidden sm:table-cell">
                     <Badge variant="neutral">{bucket.region || 'default'}</Badge>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">{bucket.objectCount?.toLocaleString() || 0}</TableCell>
+                  <TableCell className="hidden md:table-cell" title={bucket.objectCount?.toLocaleString()}>
+                    {formatCount(bucket.objectCount ?? 0)}
+                  </TableCell>
                   <TableCell>{bucket.size ? formatBytes(bucket.size) : '0 B'}</TableCell>
                   <TableCell className="hidden lg:table-cell">{formatDate(bucket.creationDate)}</TableCell>
                   <TableCell>

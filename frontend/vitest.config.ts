@@ -14,6 +14,7 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/lib/base-path.ts',
+        'src/lib/bucket-usage.ts',
         'src/lib/preview-utils.ts',
         'src/lib/highlight.ts',
         'src/lib/sort-utils.ts',

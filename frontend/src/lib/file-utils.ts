@@ -137,3 +137,12 @@ export function formatBytes(bytes: number, decimals = 2): string {
 
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
+
+const compactCount = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+
+/**
+ * Format a count for display: exact below 10,000, then compact (12.3K, 3M, 66.5T).
+ */
+export function formatCount(n: number): string {
+  return Math.abs(n) < 10_000 ? n.toLocaleString() : compactCount.format(n);
+}
