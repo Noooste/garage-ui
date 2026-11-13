@@ -46,6 +46,12 @@ type GarageConfig struct {
 	ForcePathStyle bool   `mapstructure:"force_path_style"`
 	AdminEndpoint  string `mapstructure:"admin_endpoint"`
 	AdminToken     string `mapstructure:"admin_token"`
+
+	// AutoProvisionBucketAccess lets Garage UI create its own S3 key and grant
+	// it read+write on a bucket that has no usable key yet. Default: false.
+	AutoProvisionBucketAccess bool `mapstructure:"auto_provision_bucket_access"`
+	// UIKeyName is the name of the key used for auto-provisioning (default: garage-ui).
+	UIKeyName string `mapstructure:"ui_key_name"`
 }
 
 // AuthConfig contains authentication configuration
@@ -207,6 +213,8 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.environment", "production")
 	viper.SetDefault("garage.force_path_style", true)
+	viper.SetDefault("garage.auto_provision_bucket_access", false)
+	viper.SetDefault("garage.ui_key_name", "garage-ui")
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "text")
 	viper.SetDefault("auth.oidc.cookie_name", "garage_session")
@@ -306,6 +314,8 @@ func bindEnvVars() {
 	viper.BindEnv("garage.force_path_style", "GARAGE_UI_GARAGE_FORCE_PATH_STYLE")
 	viper.BindEnv("garage.admin_endpoint", "GARAGE_UI_GARAGE_ADMIN_ENDPOINT")
 	viper.BindEnv("garage.admin_token", "GARAGE_UI_GARAGE_ADMIN_TOKEN")
+	viper.BindEnv("garage.auto_provision_bucket_access", "GARAGE_UI_GARAGE_AUTO_PROVISION_BUCKET_ACCESS")
+	viper.BindEnv("garage.ui_key_name", "GARAGE_UI_GARAGE_UI_KEY_NAME")
 
 	// Auth config
 	viper.BindEnv("auth.admin.enabled", "GARAGE_UI_AUTH_ADMIN_ENABLED")
@@ -418,6 +428,10 @@ func (c *Config) Validate() error {
 	}
 	if c.Garage.AdminToken == "" {
 		return fmt.Errorf("garage admin_token is required")
+	}
+
+	if c.Garage.AutoProvisionBucketAccess && strings.TrimSpace(c.Garage.UIKeyName) == "" {
+		return fmt.Errorf("garage ui_key_name must not be empty when auto_provision_bucket_access is enabled")
 	}
 
 	// Validate admin auth if enabled
