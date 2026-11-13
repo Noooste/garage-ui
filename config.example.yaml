@@ -180,6 +180,19 @@ cors:
   allow_credentials: false
   max_age: 3600
 
+# Upload Configuration
+upload:
+  # Strip metadata (EXIF incl. GPS/device info, XMP, IPTC, text chunks, comments)
+  # from JPEG, PNG and WebP files at upload time, without re-encoding the pixels.
+  # Formats are detected from the file content, not the name or Content-Type.
+  # The EXIF Orientation tag and ICC colour profiles are kept so images still
+  # display correctly. Fail closed: a file that looks like one of these formats
+  # but is corrupt/truncated is rejected (HTTP 400) instead of stored unstripped.
+  # Other types (GIF, SVG, ...) are stored unchanged. Applies to uploads made
+  # through Garage UI only, not to direct S3 access.
+  # Env var: GARAGE_UI_UPLOAD_STRIP_IMAGE_METADATA
+  # strip_image_metadata: false
+
 # Logging Configuration
 # The application uses zerolog for structured logging
 logging:

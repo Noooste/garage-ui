@@ -147,6 +147,23 @@ If your environment needs explicit IPv4-only binding, set `server.host: "0.0.0.0
 
 See [config.example.yaml](config.example.yaml) for all options including authentication, CORS, and logging.
 
+### Stripping image metadata on upload
+
+Photos often embed GPS coordinates, device details and timestamps. Set `upload.strip_image_metadata: true` (or `GARAGE_UI_UPLOAD_STRIP_IMAGE_METADATA=true`) to remove them from images uploaded through Garage UI. It is **off by default**.
+
+```yaml
+upload:
+  strip_image_metadata: true
+```
+
+- **Formats:** JPEG, PNG and WebP, detected from the file's bytes (not its name or `Content-Type`). Other types, including GIF and SVG, are stored unchanged.
+- **Lossless:** only the container is rewritten; image data is never re-encoded.
+- **Removed:** JPEG APP1 (Exif/XMP), APP13 (IPTC/Photoshop), comments, thumbnails and other APPn segments, and data after the end of the image; PNG `eXIf`, `tEXt`, `zTXt`, `iTXt`, `tIME` and unknown private chunks; WebP `EXIF`, `XMP ` and unknown chunks (the `VP8X` flags and RIFF size are updated).
+- **Kept:** everything needed to render the image, including ICC colour profiles and the EXIF **Orientation** tag. When an image has a non-default orientation, a minimal EXIF block holding only that tag is written back so phone photos do not end up rotated.
+- **Fail closed:** if a file is recognised as one of these formats but is truncated or corrupt, the upload is rejected with HTTP 400 (for multi-file uploads it is reported as a failed file) rather than stored with its metadata.
+- **Memory:** recognised images are buffered in memory while being processed (bounded by `server.max_body_size`); other files are streamed as before.
+- **Scope:** only uploads through the Garage UI API are processed. Objects written directly to Garage over S3 (or via presigned URLs) are not.
+
 ### Serving from a subpath
 
 Set `server.base_path` (or `GARAGE_UI_SERVER_BASE_PATH`) to run Garage UI behind a reverse proxy that routes by path — useful when one hostname has to carry several services, e.g. a Tailscale node with `tailscale serve`.
