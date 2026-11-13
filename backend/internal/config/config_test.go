@@ -940,3 +940,63 @@ auth:
 		t.Errorf("Auth.MetricsPublic = false, want true (env should override YAML)")
 	}
 }
+
+func TestLoad_StripImageMetadata_DefaultsFalse(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Upload.StripImageMetadata {
+		t.Errorf("Upload.StripImageMetadata = true, want false by default")
+	}
+}
+
+func TestLoad_StripImageMetadata_YAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+upload:
+  strip_image_metadata: true
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Upload.StripImageMetadata {
+		t.Errorf("Upload.StripImageMetadata = false, want true from YAML")
+	}
+}
+
+func TestLoad_StripImageMetadata_EnvOverridesYAML(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML+`
+upload:
+  strip_image_metadata: false
+`)
+	t.Setenv("GARAGE_UI_UPLOAD_STRIP_IMAGE_METADATA", "true")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Upload.StripImageMetadata {
+		t.Errorf("Upload.StripImageMetadata = false, want true (env should override YAML)")
+	}
+}
+
+func TestLoad_StripImageMetadata_EnvOnly(t *testing.T) {
+	resetViper(t)
+	path := writeConfigFile(t, minimalValidYAML)
+	t.Setenv("GARAGE_UI_UPLOAD_STRIP_IMAGE_METADATA", "true")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Upload.StripImageMetadata {
+		t.Errorf("Upload.StripImageMetadata = false, want true from env")
+	}
+}
