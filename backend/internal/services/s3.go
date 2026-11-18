@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"Noooste/garage-ui/internal/config"
@@ -23,6 +24,10 @@ type S3Service struct {
 	client       *minio.Client
 	config       *config.GarageConfig
 	adminService AdminService
+
+	// provisionMu serialises auto-provisioning (see s3_provision.go) so that
+	// concurrent first requests for a bucket create/grant the UI key once.
+	provisionMu sync.Mutex
 }
 
 // NewS3Service creates a new S3 service instance using MinIO SDK
@@ -104,6 +109,26 @@ func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string,
 		return nil, fmt.Errorf("failed to get bucket info: %w", err)
 	}
 
+	if creds := s.credentialsFromBucketKeys(ctx, bucketName, bucketInfo, op); creds != nil {
+		return creds, nil
+	}
+
+	noCreds := fmt.Errorf("no valid credentials found for bucket %s", bucketName)
+	if !s.config.AutoProvisionBucketAccess {
+		return nil, noCreds
+	}
+
+	creds, err := s.provisionBucketAccess(ctx, bucketName, op)
+	if err != nil {
+		return nil, fmt.Errorf("%w (auto-provisioning access failed: %w)", noCreds, err)
+	}
+	return creds, nil
+}
+
+// credentialsFromBucketKeys returns credentials (and caches them) for the
+// first key on the bucket whose permissions satisfy op and whose secret can be
+// fetched, or nil if there is none.
+func (s *S3Service) credentialsFromBucketKeys(ctx context.Context, bucketName string, bucketInfo *models.GarageBucketInfo, op Operation) *credentials.Credentials {
 	for _, keyInfo := range bucketInfo.Keys {
 		if !op.satisfies(keyInfo.Permissions) {
 			continue
@@ -114,10 +139,9 @@ func (s *S3Service) getBucketCredentials(ctx context.Context, bucketName string,
 		}
 		creds := credentials.NewStaticV4(keyDetails.AccessKeyID, *keyDetails.SecretAccessKey, "")
 		setKeyInCache(bucketName, keyInfo.Permissions, creds)
-		return creds, nil
+		return creds
 	}
-
-	return nil, fmt.Errorf("no valid credentials found for bucket %s", bucketName)
+	return nil
 }
 
 // getMinioClient creates a MinIO client for a specific bucket with credentials

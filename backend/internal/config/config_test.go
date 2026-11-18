@@ -940,3 +940,68 @@ auth:
 		t.Errorf("Auth.MetricsPublic = false, want true (env should override YAML)")
 	}
 }
+
+func TestLoad_AutoProvisionBucketAccess_DefaultsOff(t *testing.T) {
+	resetViper(t)
+	cfg, err := Load(writeConfigFile(t, minimalValidYAML))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Garage.AutoProvisionBucketAccess {
+		t.Error("AutoProvisionBucketAccess = true, want false by default")
+	}
+	if cfg.Garage.UIKeyName != "garage-ui" {
+		t.Errorf("UIKeyName = %q, want garage-ui", cfg.Garage.UIKeyName)
+	}
+}
+
+func TestLoad_AutoProvisionBucketAccess_YAML(t *testing.T) {
+	resetViper(t)
+	cfg, err := Load(writeConfigFile(t, `
+server:
+  port: 8080
+garage:
+  endpoint: http://garage:3900
+  admin_endpoint: http://garage:3903
+  admin_token: supersecret
+  auto_provision_bucket_access: true
+  ui_key_name: my-ui
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Garage.AutoProvisionBucketAccess || cfg.Garage.UIKeyName != "my-ui" {
+		t.Errorf("got %+v", cfg.Garage)
+	}
+}
+
+func TestLoad_AutoProvisionBucketAccess_Env(t *testing.T) {
+	resetViper(t)
+	t.Setenv("GARAGE_UI_GARAGE_AUTO_PROVISION_BUCKET_ACCESS", "true")
+	t.Setenv("GARAGE_UI_GARAGE_UI_KEY_NAME", "from-env")
+	cfg, err := Load(writeConfigFile(t, minimalValidYAML))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Garage.AutoProvisionBucketAccess || cfg.Garage.UIKeyName != "from-env" {
+		t.Errorf("got %+v", cfg.Garage)
+	}
+}
+
+func TestValidate_AutoProvisionRequiresKeyName(t *testing.T) {
+	c := validBaseConfig()
+	c.Garage.AutoProvisionBucketAccess = true
+	c.Garage.UIKeyName = "  "
+	if err := c.Validate(); err == nil {
+		t.Error("expected error for empty ui_key_name with auto provisioning on")
+	}
+	c.Garage.UIKeyName = "garage-ui"
+	if err := c.Validate(); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	c.Garage.AutoProvisionBucketAccess = false
+	c.Garage.UIKeyName = ""
+	if err := c.Validate(); err != nil {
+		t.Errorf("empty name must be fine when the option is off: %v", err)
+	}
+}

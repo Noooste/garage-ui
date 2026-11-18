@@ -147,6 +147,31 @@ If your environment needs explicit IPv4-only binding, set `server.host: "0.0.0.0
 
 See [config.example.yaml](config.example.yaml) for all options including authentication, CORS, and logging.
 
+### Buckets without an access key
+
+Garage UI does not own an S3 key. For every object operation it looks up a key that is already allowed on the bucket and uses it. A bucket that has no such key, for instance one just created from the UI or the Garage CLI, can be listed in the bucket overview but fails on every object operation with `no valid credentials found for bucket ...` until a key is granted to it.
+
+Set `garage.auto_provision_bucket_access: true` (or `GARAGE_UI_GARAGE_AUTO_PROVISION_BUCKET_ACCESS=true`) to let Garage UI fix this itself. It is **off by default**.
+
+```yaml
+garage:
+  auto_provision_bucket_access: true
+  ui_key_name: "garage-ui" # optional, this is the default
+```
+
+When an object operation finds no usable key on a bucket, Garage UI:
+
+1. looks up the key named `ui_key_name` through the admin API and creates it if it does not exist (no create-bucket permission, never expires). The key is reused for all buckets;
+2. grants that key **read and write** (never owner) on the bucket;
+3. continues the original request. If the key was already on the bucket with fewer permissions (e.g. read-only) it is topped up to read+write; other keys are never modified.
+
+Things to know:
+
+- It only happens inside requests that already passed authentication and authorization, for buckets that exist. Each action is logged at info level (bucket and redacted key id, never the secret).
+- The key's permissions are per bucket, not per user: once granted, the key can read and write the whole bucket in Garage, while per-user limits (`access_control`) are still enforced by Garage UI itself.
+- The admin token must be allowed to create keys and change bucket permissions, otherwise the request fails with an error mentioning the provisioning failure (nothing is cached as a success).
+- The key shows up in the key list. Deleting it is safe, it is recreated on the next provisioning. With several Garage UI replicas starting on a brand-new bucket at the same moment, duplicate keys with the same name could be created (harmless; the one with the smallest ID is used).
+
 ### Serving from a subpath
 
 Set `server.base_path` (or `GARAGE_UI_SERVER_BASE_PATH`) to run Garage UI behind a reverse proxy that routes by path — useful when one hostname has to carry several services, e.g. a Tailscale node with `tailscale serve`.

@@ -47,6 +47,18 @@ garage:
   admin_endpoint: "http://localhost:3903" # Garage Admin API endpoint
   admin_token: "changeme" # Admin API bearer token
 
+  # Garage UI has no S3 key of its own: for each bucket it borrows a key that is
+  # already allowed on that bucket. A bucket without any usable key (e.g. one
+  # just created in the UI or with the Garage CLI) therefore fails with
+  # "no valid credentials found for bucket ..." until a key is granted manually.
+  # When enabled, Garage UI instead creates (once) a key named ui_key_name, grants
+  # it read+write (never owner, no create-bucket) on the bucket on first use and
+  # carries on with the request. Needs an admin token allowed to manage keys.
+  # The key is visible in the Keys page; deleting it just makes it be recreated.
+  # Env vars: GARAGE_UI_GARAGE_AUTO_PROVISION_BUCKET_ACCESS, GARAGE_UI_GARAGE_UI_KEY_NAME
+  # auto_provision_bucket_access: false
+  # ui_key_name: "garage-ui"
+
 # Authentication Configuration
 # You can enable one or both authentication methods
 auth:
