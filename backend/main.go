@@ -154,7 +154,11 @@ func main() {
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(version)
 	bucketHandler := handlers.NewBucketHandler(adminService, s3Service)
-	objectHandler := handlers.NewObjectHandler(s3Service, authService)
+	objectHandler := handlers.NewObjectHandler(s3Service, authService,
+		handlers.WithStripImageMetadata(cfg.Upload.StripImageMetadata))
+	if cfg.Upload.StripImageMetadata {
+		logger.Info().Msg("Image metadata stripping enabled for uploads (JPEG, PNG, WebP)")
+	}
 	userHandler := handlers.NewUserHandler(adminService)
 	clusterHandler := handlers.NewClusterHandler(adminService)
 	monitoringHandler := handlers.NewMonitoringHandler(adminService, s3Service)

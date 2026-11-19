@@ -19,6 +19,7 @@ type Config struct {
 	Auth          AuthConfig           `mapstructure:"auth"`
 	CORS          CORSConfig           `mapstructure:"cors"`
 	Logging       LoggingConfig        `mapstructure:"logging"`
+	Upload        UploadConfig         `mapstructure:"upload"`
 	AccessControl *AccessControlConfig `mapstructure:"access_control"`
 }
 
@@ -138,6 +139,13 @@ type CORSConfig struct {
 	MaxAge           int      `mapstructure:"max_age"`
 }
 
+// UploadConfig contains upload-time processing options
+type UploadConfig struct {
+	// StripImageMetadata removes EXIF/XMP/IPTC/text metadata from JPEG, PNG and
+	// WebP uploads (EXIF Orientation and ICC profiles are kept). Default: false.
+	StripImageMetadata bool `mapstructure:"strip_image_metadata"`
+}
+
 // LoggingConfig contains logging configuration
 type LoggingConfig struct {
 	Level  string `mapstructure:"level"`
@@ -207,6 +215,7 @@ func Load(configPath string, opts ...LoadOption) (*Config, error) {
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.environment", "production")
 	viper.SetDefault("garage.force_path_style", true)
+	viper.SetDefault("upload.strip_image_metadata", false)
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "text")
 	viper.SetDefault("auth.oidc.cookie_name", "garage_session")
@@ -349,6 +358,9 @@ func bindEnvVars() {
 	viper.BindEnv("cors.allowed_headers", "GARAGE_UI_CORS_ALLOWED_HEADERS")
 	viper.BindEnv("cors.allow_credentials", "GARAGE_UI_CORS_ALLOW_CREDENTIALS")
 	viper.BindEnv("cors.max_age", "GARAGE_UI_CORS_MAX_AGE")
+
+	// Upload config
+	viper.BindEnv("upload.strip_image_metadata", "GARAGE_UI_UPLOAD_STRIP_IMAGE_METADATA")
 
 	// Logging config
 	viper.BindEnv("logging.level", "GARAGE_UI_LOGGING_LEVEL")

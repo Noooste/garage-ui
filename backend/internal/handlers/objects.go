@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"io"
 	"net/url"
 	"path"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"Noooste/garage-ui/internal/imagemeta"
 	"Noooste/garage-ui/internal/models"
 	"Noooste/garage-ui/internal/services"
 
@@ -81,14 +83,54 @@ const previewTokenTTL = time.Hour
 type ObjectHandler struct {
 	s3Service     services.S3Storage
 	previewTokens PreviewTokenMinter
+
+	stripImageMetadata bool
+}
+
+// ObjectHandlerOption customises an ObjectHandler.
+type ObjectHandlerOption func(*ObjectHandler)
+
+// WithStripImageMetadata makes uploads of JPEG/PNG/WebP images (detected from
+// their content) pass through imagemeta.StripReader before being stored.
+// A recognised image that cannot be stripped is rejected, never stored as-is.
+func WithStripImageMetadata(enabled bool) ObjectHandlerOption {
+	return func(h *ObjectHandler) { h.stripImageMetadata = enabled }
 }
 
 // NewObjectHandler creates a new object handler.
-func NewObjectHandler(s3Service services.S3Storage, previewTokens PreviewTokenMinter) *ObjectHandler {
-	return &ObjectHandler{
+func NewObjectHandler(s3Service services.S3Storage, previewTokens PreviewTokenMinter, opts ...ObjectHandlerOption) *ObjectHandler {
+	h := &ObjectHandler{
 		s3Service:     s3Service,
 		previewTokens: previewTokens,
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
+// uploadBody returns the reader to store for an uploaded file, stripping image
+// metadata when enabled. The returned error wraps imagemeta.ErrInvalidImage
+// when the file is a recognised image that could not be processed.
+func (h *ObjectHandler) uploadBody(r io.Reader) (io.Reader, error) {
+	if !h.stripImageMetadata {
+		return r, nil
+	}
+	body, _, err := imagemeta.StripReader(r)
+	return body, err
+}
+
+// stripErrorResponse maps an uploadBody error to an HTTP response: corrupt
+// images are the client's fault (400), anything else is a server error.
+func stripErrorResponse(c fiber.Ctx, err error) error {
+	if errors.Is(err, imagemeta.ErrInvalidImage) {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			models.ErrorResponse(models.ErrCodeBadRequest, "Image metadata could not be stripped, upload rejected: "+err.Error()),
+		)
+	}
+	return c.Status(fiber.StatusInternalServerError).JSON(
+		models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to read uploaded file: "+err.Error()),
+	)
 }
 
 // ListObjects lists objects in a bucket with optional filtering and pagination
@@ -168,7 +210,7 @@ func (h *ObjectHandler) ListObjects(c fiber.Ctx) error {
 //	@Param			file	formData	file													true	"File to upload"
 //	@Param			key		formData	string													false	"Object key (path in bucket). If not provided, the filename will be used"
 //	@Success		201		{object}	models.APIResponse{data=models.ObjectUploadResponse}	"Object uploaded successfully"
-//	@Failure		400		{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters"
+//	@Failure		400		{object}	models.APIResponse{error=models.APIError}				"Invalid request parameters, or an image whose metadata could not be stripped (when upload.strip_image_metadata is enabled)"
 //	@Failure		404		{object}	models.APIResponse{error=models.APIError}				"Bucket not found"
 //	@Failure		500		{object}	models.APIResponse{error=models.APIError}				"Failed to upload object"
 //	@Router			/api/v1/buckets/{bucket}/objects [post]
@@ -210,8 +252,13 @@ func (h *ObjectHandler) UploadObject(c fiber.Ctx) error {
 	// Get content type
 	contentType := file.Header.Get("Content-Type")
 
+	body, err := h.uploadBody(fileHandle)
+	if err != nil {
+		return stripErrorResponse(c, err)
+	}
+
 	// Upload to Garage
-	uploadResult, err := h.s3Service.UploadObject(ctx, bucketName, key, fileHandle, contentType)
+	uploadResult, err := h.s3Service.UploadObject(ctx, bucketName, key, body, contentType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(
 			models.ErrorResponse(models.ErrCodeUploadFailed, "Failed to upload object: "+err.Error()),
@@ -759,15 +806,18 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 		)
 	}
 
-	// Prepare upload data structure
-	uploadFiles := make([]struct {
+	// Prepare upload data structure. Files whose metadata cannot be stripped
+	// are not uploaded; they are reported as failures alongside the results.
+	type uploadFile = struct {
 		Key         string
 		Body        io.Reader
 		ContentType string
-	}, len(files))
+	}
+	uploadFiles := make([]uploadFile, 0, len(files))
+	stripFailures := make([]services.UploadResult, 0)
 
 	// Open all files and prepare for upload
-	for i, fileHeader := range files {
+	for _, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(
@@ -783,19 +833,25 @@ func (h *ObjectHandler) UploadMultipleObjects(c fiber.Ctx) error {
 			contentType = "application/octet-stream"
 		}
 
-		uploadFiles[i] = struct {
-			Key         string
-			Body        io.Reader
-			ContentType string
-		}{
-			Key:         key,
-			Body:        file,
-			ContentType: contentType,
+		body, err := h.uploadBody(file)
+		if err != nil {
+			stripFailures = append(stripFailures, services.UploadResult{
+				Key:         key,
+				Error:       errors.New("image metadata could not be stripped, upload rejected: " + err.Error()),
+				ContentType: contentType,
+			})
+			continue
 		}
+
+		uploadFiles = append(uploadFiles, uploadFile{Key: key, Body: body, ContentType: contentType})
 	}
 
 	// Upload all files using the service method
-	results := h.s3Service.UploadMultipleObjects(ctx, bucketName, uploadFiles)
+	var results []services.UploadResult
+	if len(uploadFiles) > 0 {
+		results = h.s3Service.UploadMultipleObjects(ctx, bucketName, uploadFiles)
+	}
+	results = append(results, stripFailures...)
 
 	// Process results and categorize successes and failures
 	var successFiles []models.ObjectUploadResult
